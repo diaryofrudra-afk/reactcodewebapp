@@ -73,8 +73,23 @@ export function GPSPage({ active }: { active: boolean }) {
         </div>
       ) : null}
 
-      <div className="gps-iframe-wrap">
-        <iframe src="https://fleet.blackbuck.com" title="GPS Tracking" allow="geolocation" />
+      <div className="gps-iframe-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '40px', background: 'var(--bg2)', borderRadius: 'var(--rlg)', border: '1px solid var(--border)' }}>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" strokeWidth="1.5" strokeLinecap="round">
+          <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        <div style={{ fontSize: '13px', color: 'var(--t3)', textAlign: 'center' }}>
+          Blackbuck live map cannot be embedded due to browser security restrictions.
+        </div>
+        <a
+          href="https://fleet.blackbuck.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-sm accent"
+          style={{ textDecoration: 'none' }}
+        >
+          Open Blackbuck Fleet →
+        </a>
       </div>
     </div>
   );

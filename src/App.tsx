@@ -96,7 +96,7 @@ export default function App() {
   }
 
   return (
-    <div id="app-shell" className={sidebarCollapsed ? 'sidebar-collapsed' : ''}>
+    <div id="app-shell" className={`visible${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <Sidebar onSignOut={handleSignOut} />
       <div className="page-content">
         <ErrorBoundary><FleetPage active={activePage === 'fleet'} /></ErrorBoundary>

@@ -10,7 +10,8 @@ export function useBlackbuck() {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch('http://localhost:3000/api/fetch-blackbuck');
+      const base = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
+      const r = await fetch(`${base}/api/fetch-blackbuck`);
       const d = await r.json();
       setData(d);
     } catch (e) {
