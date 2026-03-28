@@ -151,33 +151,38 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onSignOut }: SidebarProps) {
-  const { sidebarCollapsed, toggleTheme } = useApp();
+  const { sidebarCollapsed, toggleTheme, user } = useApp();
+  const isOwner = user === '9010719021';
 
   return (
     <aside className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`} id="sidebar">
       <SidebarHeader />
 
       <div className="sidebar-nav">
-        {/* ── Command section ── */}
-        <div className="nav-section-label">Command</div>
-        <div className="nav-section-divider" />
+        {isOwner && (
+          <>
+            {/* ── Command section ── */}
+            <div className="nav-section-label">Command</div>
+            <div className="nav-section-divider" />
 
-        <SidebarNavItem page="fleet"       label="Fleet"        icon={<FleetIcon />}       countId="nc-fleet" />
-        <SidebarNavItem page="analytics"   label="Analytics"    icon={<AnalyticsIcon />} />
-        <SidebarNavItem page="billing"     label="Billing"      icon={<BillingIcon />} />
-        <SidebarNavItem page="gps"         label="Live GPS"     icon={<GpsIcon />} />
-        <SidebarNavItem page="fuel"        label="Fuel"         icon={<FuelIcon />} />
-        <SidebarNavItem page="cameras"     label="Cameras"      icon={<CamerasIcon />} />
-        <SidebarNavItem page="diagnostics" label="Diagnostics"  icon={<DiagnosticsIcon />} countId="nc-diag" />
+            <SidebarNavItem page="fleet"       label="Fleet"        icon={<FleetIcon />}       countId="nc-fleet" />
+            <SidebarNavItem page="analytics"   label="Analytics"    icon={<AnalyticsIcon />} />
+            <SidebarNavItem page="billing"     label="Billing"      icon={<BillingIcon />} />
+            <SidebarNavItem page="gps"         label="Live GPS"     icon={<GpsIcon />} />
+            <SidebarNavItem page="fuel"        label="Fuel"         icon={<FuelIcon />} />
+            <SidebarNavItem page="cameras"     label="Cameras"      icon={<CamerasIcon />} />
+            <SidebarNavItem page="diagnostics" label="Diagnostics"  icon={<DiagnosticsIcon />} countId="nc-diag" />
 
-        {/* ── Manage section ── */}
-        <div className="nav-section-label">Manage</div>
-        <div className="nav-section-divider" />
+            {/* ── Manage section ── */}
+            <div className="nav-section-label">Manage</div>
+            <div className="nav-section-divider" />
 
-        <SidebarNavItem page="assets"    label="Assets"     icon={<AssetsIcon />}    countId="nc-assets" />
-        <SidebarNavItem page="operators" label="Operators"  icon={<OperatorsIcon />} countId="nc-ops" />
-        <SidebarNavItem page="earnings"  label="Earnings"   icon={<EarningsIcon />} />
-        <SidebarNavItem page="attendance" label="Attendance" icon={<AttendanceIcon />} />
+            <SidebarNavItem page="assets"    label="Assets"     icon={<AssetsIcon />}    countId="nc-assets" />
+            <SidebarNavItem page="operators" label="Operators"  icon={<OperatorsIcon />} countId="nc-ops" />
+            <SidebarNavItem page="earnings"  label="Earnings"   icon={<EarningsIcon />} />
+            <SidebarNavItem page="attendance" label="Attendance" icon={<AttendanceIcon />} />
+          </>
+        )}
 
         {/* ── System section ── */}
         <div className="nav-section-label">System</div>
@@ -193,13 +198,17 @@ export function Sidebar({ onSignOut }: SidebarProps) {
           {sidebarCollapsed && <span className="nav-tooltip">Theme</span>}
         </div>
 
-        {/* ── Operator View section ── */}
-        <div className="nav-section-label">Operator View</div>
-        <div className="nav-section-divider" />
+        {!isOwner && (
+          <>
+            {/* ── Operator View section ── */}
+            <div className="nav-section-label">Operator View</div>
+            <div className="nav-section-divider" />
 
-        <SidebarNavItem page="logger"     label="Log Time" icon={<LoggerIcon />} />
-        <SidebarNavItem page="op-history" label="History"  icon={<OpHistoryIcon />} countId="nc-op-ts" />
-        <SidebarNavItem page="op-files"   label="My Files" icon={<OpFilesIcon />}   countId="nc-op-files" />
+            <SidebarNavItem page="logger"     label="Log Time" icon={<LoggerIcon />} />
+            <SidebarNavItem page="op-history" label="History"  icon={<OpHistoryIcon />} countId="nc-op-ts" />
+            <SidebarNavItem page="op-files"   label="My Files" icon={<OpFilesIcon />}   countId="nc-op-files" />
+          </>
+        )}
       </div>
 
       <SidebarUser onSignOut={onSignOut} />

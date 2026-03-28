@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileDrawer } from './components/layout/MobileDrawer';
@@ -18,21 +18,56 @@ import { LoggerPage } from './pages/Logger/LoggerPage';
 import { OpHistoryPage } from './pages/OpHistory/OpHistoryPage';
 import { OpFilesPage } from './pages/OpFiles/OpFilesPage';
 import { ErrorBoundary } from './ErrorBoundary';
+import { api, setToken, clearToken, getToken } from './services/api';
 
 export default function App() {
   const { activePage, sidebarCollapsed, user, setUser } = useApp();
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Login / register form state
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+
+  // On mount: if a token exists, restore the session via /auth/me
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    api.me()
+      .then(me => setUser(me.phone))
+      .catch(() => {
+        clearToken();
+        setUser(null);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleSignOut() {
+    clearToken();
     setUser(null);
   }
 
-  function handleLogin(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
-    const cleaned = phone.replace(/\D/g, '');
-    if (cleaned.length >= 10) {
-      setUser(cleaned);
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      if (mode === 'login') {
+        const res = await api.login(phone, password);
+        setToken(res.token);
+        setUser(res.phone);
+      } else {
+        const res = await api.register(phone, password, companyName);
+        setToken(res.token);
+        setUser(res.phone);
+      }
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setAuthLoading(false);
     }
   }
 
@@ -45,7 +80,7 @@ export default function App() {
         justifyContent: 'center',
         background: 'var(--bg)',
       }}>
-        <form onSubmit={handleLogin} style={{
+        <form onSubmit={handleSubmit} style={{
           background: 'var(--bg2)',
           border: '1px solid var(--border)',
           borderRadius: '16px',
@@ -58,12 +93,54 @@ export default function App() {
           <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--t1)', fontFamily: 'var(--fh)' }}>
             Suprwise
           </div>
-          <div style={{ fontSize: '13px', color: 'var(--t3)' }}>Enter your phone number to continue</div>
+          <div style={{ fontSize: '13px', color: 'var(--t3)' }}>
+            {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
+          </div>
+
+          {/* Toggle */}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => { setMode('login'); setAuthError(''); }}
+              style={{
+                flex: 1,
+                padding: '8px',
+                background: mode === 'login' ? 'var(--accent)' : 'var(--bg3)',
+                color: mode === 'login' ? '#fff' : 'var(--t2)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('register'); setAuthError(''); }}
+              style={{
+                flex: 1,
+                padding: '8px',
+                background: mode === 'register' ? 'var(--accent)' : 'var(--bg3)',
+                color: mode === 'register' ? '#fff' : 'var(--t2)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Register
+            </button>
+          </div>
+
           <input
             type="tel"
             value={phone}
             onChange={e => setPhone(e.target.value)}
             placeholder="Phone number"
+            required
             style={{
               padding: '10px 14px',
               background: 'var(--bg3)',
@@ -75,8 +152,52 @@ export default function App() {
             }}
             autoFocus
           />
+
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Password"
+            required
+            style={{
+              padding: '10px 14px',
+              background: 'var(--bg3)',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              color: 'var(--t1)',
+              fontSize: '14px',
+              outline: 'none',
+            }}
+          />
+
+          {mode === 'register' && (
+            <input
+              type="text"
+              value={companyName}
+              onChange={e => setCompanyName(e.target.value)}
+              placeholder="Company name"
+              required
+              style={{
+                padding: '10px 14px',
+                background: 'var(--bg3)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                color: 'var(--t1)',
+                fontSize: '14px',
+                outline: 'none',
+              }}
+            />
+          )}
+
+          {authError && (
+            <div style={{ fontSize: '13px', color: 'var(--error, #e53e3e)', padding: '8px 12px', background: 'var(--bg3)', borderRadius: '6px' }}>
+              {authError}
+            </div>
+          )}
+
           <button
             type="submit"
+            disabled={authLoading}
             style={{
               padding: '10px',
               background: 'var(--accent)',
@@ -85,10 +206,11 @@ export default function App() {
               borderRadius: '8px',
               fontWeight: 600,
               fontSize: '14px',
-              cursor: 'pointer',
+              cursor: authLoading ? 'not-allowed' : 'pointer',
+              opacity: authLoading ? 0.7 : 1,
             }}
           >
-            Continue
+            {authLoading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
           </button>
         </form>
       </div>
@@ -97,6 +219,7 @@ export default function App() {
 
   return (
     <div id="app-shell" className={`visible${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+      <div className="body-split">
       <Sidebar onSignOut={handleSignOut} />
       <div className="page-content">
         <ErrorBoundary><FleetPage active={activePage === 'fleet'} /></ErrorBoundary>
@@ -113,6 +236,7 @@ export default function App() {
         <ErrorBoundary><LoggerPage active={activePage === 'logger'} /></ErrorBoundary>
         <ErrorBoundary><OpHistoryPage active={activePage === 'op-history'} /></ErrorBoundary>
         <ErrorBoundary><OpFilesPage active={activePage === 'op-files'} /></ErrorBoundary>
+      </div>
       </div>
       <MobileDrawer
         open={drawerOpen}
