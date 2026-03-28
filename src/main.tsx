@@ -9,6 +9,7 @@ import './global.css';
 import App from './App';
 import { AppProvider } from './context/AppContext';
 import { DataProvider } from './context/DataContext';
+import { ErrorBoundary } from './ErrorBoundary';
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -17,10 +18,16 @@ ChartJS.register(
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AppProvider>
-      <DataProvider>
-        <App />
-      </DataProvider>
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <ErrorBoundary>
+          <DataProvider>
+            <ErrorBoundary>
+              <App />
+            </ErrorBoundary>
+          </DataProvider>
+        </ErrorBoundary>
+      </AppProvider>
+    </ErrorBoundary>
   </StrictMode>
 );
