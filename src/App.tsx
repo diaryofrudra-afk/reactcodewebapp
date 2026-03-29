@@ -17,6 +17,7 @@ import { DiagnosticsPage } from './pages/Diagnostics/DiagnosticsPage';
 import { LoggerPage } from './pages/Logger/LoggerPage';
 import { OpHistoryPage } from './pages/OpHistory/OpHistoryPage';
 import { OpFilesPage } from './pages/OpFiles/OpFilesPage';
+import { SettingsModal } from './pages/Settings/SettingsPage';
 import { ErrorBoundary } from './ErrorBoundary';
 import { api, setToken, clearToken, getToken } from './services/api';
 import { toISO } from './utils';
@@ -332,6 +333,7 @@ export default function App() {
         onClose={() => setDrawerOpen(false)}
         onSignOut={handleSignOut}
       />
+      <SettingsModal />
       <ToastContainer />
     </div>
   );

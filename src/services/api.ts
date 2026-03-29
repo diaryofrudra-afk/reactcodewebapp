@@ -143,6 +143,18 @@ export const api = {
   deleteOperator(id: string): Promise<void> {
     return request('DELETE', `/operators/${id}`);
   },
+  getOperatorProfile(operatorId: string): Promise<Record<string, string>> {
+    return request('GET', `/operators/${operatorId}/profile`);
+  },
+  updateOperatorProfile(operatorId: string, data: Record<string, string>): Promise<Record<string, string>> {
+    return request('PUT', `/operators/${operatorId}/profile`, data);
+  },
+  getMyOperatorProfile(): Promise<Record<string, string>> {
+    return request('GET', '/operators/me/profile');
+  },
+  updateMyOperatorProfile(data: Record<string, string>): Promise<Record<string, string>> {
+    return request('PUT', '/operators/me/profile', data);
+  },
 
   // Fuel logs
   getFuelLogs(): Promise<Record<string, FuelEntry[]>> {
@@ -375,5 +387,10 @@ export const api = {
   },
   updateOwnerProfile(data: Partial<OwnerProfile>): Promise<OwnerProfile> {
     return request('PUT', '/owner-profile', mapToSnakeCase(data));
+  },
+
+  // Password
+  changePassword(oldPassword: string, newPassword: string): Promise<{ message: string }> {
+    return request('PUT', '/auth/change-password', { old_password: oldPassword, new_password: newPassword });
   },
 };

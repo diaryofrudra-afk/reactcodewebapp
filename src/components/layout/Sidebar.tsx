@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ThemeToggle } from '../ui/ThemeToggle';
 import { SidebarHeader } from './SidebarHeader';
 import { SidebarNavItem } from './SidebarNavItem';
 import { SidebarUser } from './SidebarUser';
@@ -145,6 +144,7 @@ function OpHistoryIcon(): ReactNode {
   );
 }
 
+
 function OpFilesIcon(): ReactNode {
   return (
     <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
@@ -161,7 +161,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onSignOut }: SidebarProps) {
-  const { sidebarCollapsed, toggleTheme, userRole } = useApp();
+  const { sidebarCollapsed, userRole } = useApp();
   const isOwner = userRole === 'owner';
 
   return (
@@ -193,20 +193,6 @@ export function Sidebar({ onSignOut }: SidebarProps) {
             <SidebarNavItem page="attendance" label="Attendance" icon={<AttendanceIcon />} />
           </>
         )}
-
-        {/* ── System section ── */}
-        <div className="nav-section-label">System</div>
-        <div className="nav-section-divider" />
-
-        {/* Dark mode toggle */}
-        <div className="nav-item nav-theme-row" onClick={toggleTheme}>
-          <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-          </svg>
-          <span className="nav-label">Dark Mode</span>
-          <ThemeToggle id="sidebar-theme-switch" />
-          {sidebarCollapsed && <span className="nav-tooltip">Theme</span>}
-        </div>
 
         {!isOwner && (
           <>

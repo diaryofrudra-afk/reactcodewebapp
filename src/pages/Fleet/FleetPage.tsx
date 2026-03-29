@@ -304,16 +304,11 @@ export function FleetPage({ active }: { active: boolean }) {
           <label className="lbl">Select Operator</label>
           <select className="inp" value={selectedOp} onChange={e => setSelectedOp(e.target.value)}>
             <option value="">— Leave unassigned —</option>
-            {state.operators.map(op => {
-              const profile = state.operatorProfiles[op.phone] || state.operatorProfiles[op.id] || {};
-              const name = (profile as { name?: string }).name;
-              const taken = state.cranes.find(c => c.operator === op.phone && c.reg !== assignReg);
-              return (
+            {state.operators.filter(op => !state.cranes.some(c => c.operator === op.phone && c.reg !== assignReg)).map(op => (
                 <option key={op.id} value={op.phone}>
-                  {name ? `${name} · ` : ''}{op.phone}{taken ? ` (on ${taken.reg})` : ''}
+                  {op.name ? `${op.name} "${op.phone}"` : op.phone}
                 </option>
-              );
-            })}
+            ))}
           </select>
           <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
             <button className="btn-sm accent" onClick={confirmAssign}>

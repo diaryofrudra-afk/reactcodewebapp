@@ -56,6 +56,7 @@ export interface OwnerProfile {
   website: string;
   defaultLimit: string;
   default_limit?: string;
+  photo?: string;
 }
 
 export interface FuelEntry {

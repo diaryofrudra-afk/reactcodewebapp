@@ -9,7 +9,7 @@ function getMonthOptions(): Array<{ value: string; label: string }> {
   const opts = [];
   for (let i = 0; i < 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const value = d.toISOString().slice(0, 7);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
     opts.push({ value, label });
   }
@@ -51,7 +51,7 @@ export function AttendancePage({ active }: { active: boolean }) {
         const attendance = (attRaw as any[]).map(a => ({
           id: String(a.id),
           operator_key: String(a.operator_key),
-          date: String(a.date),
+          date: toISO(String(a.date)) || String(a.date),
           status: String(a.status),
           marked_by: String(a.marked_by),
         }));
@@ -61,9 +61,9 @@ export function AttendancePage({ active }: { active: boolean }) {
       .catch(() => {});
   }, [active, setState]);
 
-  async function toggleAttendance(opKey: string, date: string, currentPresent: boolean) {
+  async function toggleAttendance(opKey: string, allKeys: string[], date: string, currentPresent: boolean) {
     console.log(`[Attendance] Toggling ${opKey} on ${date}. Current: ${currentPresent}`);
-    const existingManual = state.attendance.find(a => a.operator_key === opKey && a.date === date);
+    const existingManual = state.attendance.find(a => allKeys.includes(a.operator_key) && a.date === date);
     
     try {
       if (currentPresent) {
@@ -71,7 +71,7 @@ export function AttendancePage({ active }: { active: boolean }) {
         const res = await api.markAttendance({ operator_key: opKey, date, status: 'absent', marked_by: 'owner' });
         setState(prev => ({
           ...prev,
-          attendance: [...prev.attendance.filter(a => !(a.operator_key === opKey && a.date === date)), {
+          attendance: [...prev.attendance.filter(a => !(allKeys.includes(a.operator_key) && a.date === date)), {
             id: String(res.id),
             operator_key: String(res.operator_key),
             date: String(res.date),
@@ -84,14 +84,14 @@ export function AttendancePage({ active }: { active: boolean }) {
         await api.unmarkAttendance(opKey, date);
         setState(prev => ({
           ...prev,
-          attendance: prev.attendance.filter(a => !(a.operator_key === opKey && a.date === date))
+          attendance: prev.attendance.filter(a => !(allKeys.includes(a.operator_key) && a.date === date))
         }));
       } else {
         showToast(`Marking ${date} as Present...`, 'info');
         const res = await api.markAttendance({ operator_key: opKey, date, status: 'present', marked_by: 'owner' });
         setState(prev => ({
           ...prev,
-          attendance: [...prev.attendance.filter(a => !(a.operator_key === opKey && a.date === date)), {
+          attendance: [...prev.attendance.filter(a => !(allKeys.includes(a.operator_key) && a.date === date)), {
             id: String(res.id),
             operator_key: String(res.operator_key),
             date: String(res.date),
@@ -156,17 +156,21 @@ export function AttendancePage({ active }: { active: boolean }) {
       <div id="attendance-list">
         {state.operators.map(operator => {
           const phone = operator.phone;
-          const profile = state.operatorProfiles[phone] || {};
+          const operatorKeys = [phone, String(operator.id)].filter(Boolean);
+          const opKey = phone || String(operator.id);
+          const profile = state.operatorProfiles[phone] || state.operatorProfiles[String(operator.id)] || {};
           const profileAny = profile as Record<string, unknown>;
           const salary = Number(profileAny.salary) || 0;
           const workDays = Number(profileAny.workingDays) || 26;
-          const crane = state.cranes.find(c => c.operator === phone || c.operator === operator.id);
+          const crane = state.cranes.find(c => operatorKeys.includes(String(c.operator)));
 
-          // Build per-day hours map from timesheets
+          // Build per-day hours map from timesheets — check ALL possible keys
           const dayHoursMap: Record<string, number> = {};
-          (state.timesheets[phone] || state.timesheets[operator.id] || []).forEach(e => {
-            const iso = toISO(e.date);
-            if (iso) dayHoursMap[iso] = (dayHoursMap[iso] || 0) + (Number(e.hoursDecimal) || 0);
+          operatorKeys.forEach(key => {
+            (state.timesheets[key] || []).forEach(e => {
+              const iso = toISO(e.date);
+              if (iso) dayHoursMap[iso] = (dayHoursMap[iso] || 0) + (Number(e.hoursDecimal) || 0);
+            });
           });
 
           // Auto-mark attendance from timesheets: if hours logged on a day, mark as present
@@ -174,8 +178,8 @@ export function AttendancePage({ active }: { active: boolean }) {
           for (const [iso, hrs] of Object.entries(dayHoursMap)) {
             if (hrs > 0) att[iso] = { present: true, source: 'timesheet' };
           }
-          // Merge manual attendance - MANUAL OVERRIDES AUTO
-          state.attendance.filter(a => a.operator_key === phone).forEach(a => {
+          // Merge manual/backend attendance — check ALL possible keys. MANUAL OVERRIDES AUTO
+          state.attendance.filter(a => operatorKeys.includes(a.operator_key)).forEach(a => {
             if (a.status === 'present') {
               att[a.date] = { present: true, source: 'manual' };
             } else if (a.status === 'absent') {
@@ -232,8 +236,8 @@ export function AttendancePage({ active }: { active: boolean }) {
                 onMouseDown={(e) => {
                   if (isFuture) return;
                   e.preventDefault(); e.stopPropagation();
-                  console.log(`[UI] Clicked cell: ${iso} for ${phone}`);
-                  void toggleAttendance(phone, iso, !!isPresent);
+                  console.log(`[UI] Clicked cell: ${iso} for ${opKey}`);
+                  void toggleAttendance(opKey, operatorKeys, iso, !!isPresent);
                 }}
               >
                 <svg viewBox="0 0 36 36" width="38" height="38" style={{ pointerEvents: 'none' }}>

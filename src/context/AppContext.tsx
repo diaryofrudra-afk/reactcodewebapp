@@ -27,6 +27,8 @@ interface AppContextValue {
   save: () => void;
   toasts: Toast[];
   showToast: (msg: string, type?: Toast['type']) => void;
+  settingsOpen: boolean;
+  setSettingsOpen: (open: boolean) => void;
 }
 
 const defaultOwnerProfile: OwnerProfile = {
@@ -79,6 +81,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const [appState, setAppState] = useState<AppState>(loadInitialState);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const setUser = (u: string | null) => {
     setUserState(u);
@@ -118,6 +121,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       userRole, setUserRole,
       state: appState, setState: setAppState, save,
       toasts, showToast,
+      settingsOpen, setSettingsOpen,
     }}>
       {children}
     </AppContext.Provider>

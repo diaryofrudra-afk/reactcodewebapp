@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { Modal } from '../../components/ui/Modal';
+import { ImageCropper } from '../../components/ui/ImageCropper';
 import { fmtINR, fmtHours, calcBill } from '../../utils';
 import { api } from '../../services/api';
 import type { Operator, TimesheetEntry } from '../../types';
@@ -10,6 +11,15 @@ function getAccHrs(entries: TimesheetEntry[], date: string, startTime: string): 
   return entries
     .filter(e => e.date === date && e.startTime < startTime)
     .reduce((s, e) => s + (Number(e.hoursDecimal) || 0), 0);
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 const BLANK_FORM = { name: '', phone: '', license: '', aadhaar: '' };
@@ -22,6 +32,23 @@ export function OperatorsPage({ active }: { active: boolean }) {
   const [form, setForm] = useState({ ...BLANK_FORM });
   const [assignOpId, setAssignOpId] = useState<string | null>(null);
   const [selectedCrane, setSelectedCrane] = useState('');
+  const [opPhotos, setOpPhotos] = useState<Record<string, string>>({});
+  const [editPhoto, setEditPhoto] = useState('');
+  const photoRef = useRef<HTMLInputElement>(null);
+  const [cropSrc, setCropSrc] = useState('');
+
+  // Load operator photos
+  useEffect(() => {
+    if (!active) return;
+    state.operators.forEach(op => {
+      api.getOperatorProfile(op.id)
+        .then(p => {
+          if (p.photo) setOpPhotos(prev => ({ ...prev, [op.id]: p.photo }));
+        })
+        .catch(() => {});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, state.operators.length]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -36,6 +63,7 @@ export function OperatorsPage({ active }: { active: boolean }) {
 
   function openAdd() {
     setForm({ ...BLANK_FORM });
+    setEditPhoto('');
     setEditId(null);
     setModalOpen(true);
   }
@@ -49,6 +77,7 @@ export function OperatorsPage({ active }: { active: boolean }) {
       license: op.license || '',
       aadhaar: op.aadhaar || '',
     });
+    setEditPhoto(opPhotos[id] || '');
     setEditId(id);
     setModalOpen(true);
   }
@@ -62,6 +91,11 @@ export function OperatorsPage({ active }: { active: boolean }) {
     try {
       if (editId) {
         await api.updateOperator(editId, { name, phone, license: form.license.trim(), aadhaar: form.aadhaar.trim() });
+        // Save photo if changed
+        if (editPhoto !== (opPhotos[editId] || '')) {
+          await api.updateOperatorProfile(editId, { photo: editPhoto });
+          setOpPhotos(prev => ({ ...prev, [editId]: editPhoto }));
+        }
         setState(prev => ({
           ...prev,
           operators: prev.operators.map(o =>
@@ -74,8 +108,14 @@ export function OperatorsPage({ active }: { active: boolean }) {
       } else {
         if (state.operators.find(o => o.phone === phone)) return showToast('Phone already registered', 'error');
         const created = await api.createOperator({ name, phone, license: form.license.trim(), aadhaar: form.aadhaar.trim(), status: 'active' });
+        const newId = created.id || String(Date.now());
+        // Save photo for new operator
+        if (editPhoto) {
+          await api.updateOperatorProfile(newId, { photo: editPhoto });
+          setOpPhotos(prev => ({ ...prev, [newId]: editPhoto }));
+        }
         const newOp: Operator = {
-          id: created.id || String(Date.now()),
+          id: newId,
           name,
           phone,
           license: form.license.trim(),
@@ -188,7 +228,11 @@ export function OperatorsPage({ active }: { active: boolean }) {
             });
             return (
               <div key={op.id} className="op-row">
-                <div className="op-row-av">{initials}</div>
+                {opPhotos[op.id] ? (
+                  <img src={opPhotos[op.id]} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                ) : (
+                  <div className="op-row-av">{initials}</div>
+                )}
                 <div className="op-row-info">
                   <div className="op-row-name">{op.name}</div>
                   <div className="op-row-meta">
@@ -234,6 +278,34 @@ export function OperatorsPage({ active }: { active: boolean }) {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Operator' : 'Add Operator'}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Photo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+            {editPhoto ? (
+              <img src={editPhoto} alt="" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }} />
+            ) : (
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--accent-s)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: 'var(--accent)' }}>
+                {form.name ? form.name.slice(0, 2).toUpperCase() : '?'}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <button className="btn-sm outline" type="button" onClick={() => photoRef.current?.click()} style={{ fontSize: 11 }}>
+                {editPhoto ? 'Change Photo' : 'Upload Photo'}
+              </button>
+              {editPhoto && (
+                <button className="btn-sm outline" type="button" style={{ fontSize: 11, color: 'var(--error, #e53e3e)' }} onClick={() => setEditPhoto('')}>
+                  Remove
+                </button>
+              )}
+              <input ref={photoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (file.size > 5 * 1024 * 1024) return showToast('Image must be under 5 MB', 'error');
+                const base64 = await fileToBase64(file);
+                setCropSrc(base64);
+                e.target.value = '';
+              }} />
+            </div>
+          </div>
           <label className="lbl">Name *</label>
           <input className="inp" placeholder="Full name" value={form.name} onChange={e => f('name', e.target.value)} />
           <label className="lbl">Phone *</label>
@@ -254,21 +326,27 @@ export function OperatorsPage({ active }: { active: boolean }) {
           <label className="lbl">Select Asset</label>
           <select className="inp" value={selectedCrane} onChange={e => setSelectedCrane(e.target.value)}>
             <option value="">— Leave unassigned —</option>
-            {state.cranes.map(c => {
-              const takenBy = c.operator && c.operator !== (state.operators.find(o => o.id === assignOpId)?.phone || '');
-              const takenOp = takenBy ? state.operators.find(o => o.phone === c.operator) : null;
-              return (
+            {state.cranes.filter(c => !c.operator || c.operator === (state.operators.find(o => o.id === assignOpId)?.phone || '')).map(c => (
                 <option key={c.reg} value={c.reg}>
-                  {c.reg}{c.make ? ` · ${c.make}` : ''}{c.model ? ` ${c.model}` : ''}{takenOp ? ` (${takenOp.name})` : c.operator && takenBy ? ` (${c.operator})` : ''}
+                  {c.reg}{c.make ? ` · ${c.make}` : ''}{c.model ? ` ${c.model}` : ''}
                 </option>
-              );
-            })}
+            ))}
           </select>
           <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
             <button className="btn-sm accent" onClick={confirmAssign}>Assign</button>
             <button className="btn-sm outline" onClick={() => setAssignOpId(null)}>Cancel</button>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={!!cropSrc} onClose={() => setCropSrc('')} title="Adjust Photo">
+        {cropSrc && (
+          <ImageCropper
+            src={cropSrc}
+            onCrop={(cropped) => { setEditPhoto(cropped); setCropSrc(''); }}
+            onCancel={() => setCropSrc('')}
+          />
+        )}
       </Modal>
     </div>
   );

@@ -379,16 +379,11 @@ export function AssetsPage({ active }: { active: boolean }) {
           <label className="lbl">Assign Operator</label>
           <select className="inp" value={form.operator} onChange={e => f('operator', e.target.value)}>
             <option value="">— Leave unassigned —</option>
-            {state.operators.map(op => {
-              const profile = state.operatorProfiles[op.phone] || state.operatorProfiles[op.id] || {};
-              const name = (profile as { name?: string }).name;
-              const taken = state.cranes.find(c => c.operator === op.phone && c.reg !== editReg);
-              return (
+            {state.operators.filter(op => !state.cranes.some(c => c.operator === op.phone && c.reg !== editReg)).map(op => (
                 <option key={op.id} value={op.phone}>
-                  {name ? `${name} · ` : ''}{op.phone}{taken ? ` (on ${taken.reg})` : ''}
+                  {op.name ? `${op.name} "${op.phone}"` : op.phone}
                 </option>
-              );
-            })}
+            ))}
           </select>
           <label className="lbl">Site</label>
           <input className="inp" placeholder="Site/location" value={form.site} onChange={e => f('site', e.target.value)} />
@@ -408,16 +403,11 @@ export function AssetsPage({ active }: { active: boolean }) {
           <label className="lbl">Select Operator</label>
           <select className="inp" value={selectedOp} onChange={e => setSelectedOp(e.target.value)}>
             <option value="">— Leave unassigned —</option>
-            {state.operators.map(op => {
-              const profile = state.operatorProfiles[op.phone] || state.operatorProfiles[op.id] || {};
-              const name = (profile as { name?: string }).name;
-              const taken = state.cranes.find(c => c.operator === op.phone && c.reg !== assignReg);
-              return (
+            {state.operators.filter(op => !state.cranes.some(c => c.operator === op.phone && c.reg !== assignReg)).map(op => (
                 <option key={op.id} value={op.phone}>
-                  {name ? `${name} · ` : ''}{op.phone}{taken ? ` (on ${taken.reg})` : ''}
+                  {op.name ? `${op.name} "${op.phone}"` : op.phone}
                 </option>
-              );
-            })}
+            ))}
           </select>
           <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
             <button className="btn-sm accent" onClick={confirmAssign}>Assign</button>
