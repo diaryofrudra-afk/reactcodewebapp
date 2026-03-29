@@ -1398,6 +1398,29 @@
       background: var(--t4)
     }
 
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      position: relative;
+    }
+
+    .pulse-dot::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 2px solid var(--green);
+      animation: pulse 1.5s infinite;
+      opacity: 0;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.5); opacity: 0.8; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+
     .crane-actions {
       display: flex;
       gap: 4px
@@ -2627,6 +2650,19 @@
       display: flex
     }
 
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 4, 18, 0.35);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
     .modal {
       background: rgba(16, 16, 30, 0.72);
       backdrop-filter: blur(48px) saturate(180%);
@@ -2642,6 +2678,42 @@
         0 0 0 1px rgba(157, 111, 255, 0.1),
         inset 0 1px 0 rgba(255, 255, 255, 0.07);
       animation: slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1)
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 700;
+      font-family: var(--fh);
+      color: var(--t1);
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--t3);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: var(--r);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s, background 0.15s;
+    }
+    .modal-close:hover {
+      color: var(--t1);
+      background: var(--bg5);
+    }
+
+    .modal-body {
+      max-height: 70vh;
+      overflow-y: auto;
     }
 
     .modal.wide {
@@ -4708,8 +4780,23 @@
     }
 
     /* ══ ASSETS PAGE LIST ══ */
+    .asset-row {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--rlg);
+      padding: 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+      cursor: default
+    }
+
     .asset-row:hover {
-      background: var(--bg4)
+      background: var(--bg4);
+      border-color: var(--border2);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12)
     }
 
     .asset-row-reg {
@@ -4744,17 +4831,20 @@
     /* ══ OPERATORS PAGE LIST ══ */
     .op-row {
       background: var(--bg3);
+      border: 1px solid var(--border);
       border-radius: var(--rlg);
       padding: 14px 16px;
       margin-bottom: 8px;
       display: flex;
       align-items: center;
       gap: 12px;
-      transition: background 0.18s
+      transition: background 0.2s, border-color 0.2s, box-shadow 0.2s
     }
 
     .op-row:hover {
-      background: var(--bg4)
+      background: var(--bg4);
+      border-color: var(--border2);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12)
     }
 
     .op-row-av {
@@ -5202,6 +5292,28 @@
       border-color: var(--border2);
     }
 
+    [data-theme="light"] .asset-row {
+      background: var(--bg3);
+      border-color: var(--border);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    [data-theme="light"] .asset-row:hover {
+      box-shadow: 0 6px 24px rgba(124,58,237,0.1);
+      border-color: var(--border2);
+    }
+
+    [data-theme="light"] .op-row {
+      background: var(--bg3);
+      border-color: var(--border);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    [data-theme="light"] .op-row:hover {
+      box-shadow: 0 6px 24px rgba(124,58,237,0.1);
+      border-color: var(--border2);
+    }
+
     [data-theme="light"] .kpi-val {
       color: var(--t1);
       text-shadow: none;
@@ -5228,7 +5340,8 @@
       box-shadow: 0 24px 64px rgba(0,0,0,0.15);
     }
 
-    [data-theme="light"] .overlay {
+    [data-theme="light"] .overlay,
+    [data-theme="light"] .modal-overlay {
       background: rgba(200, 210, 240, 0.3);
     }
 
@@ -5662,7 +5775,8 @@
     }
 
     /* ── Overlay backdrops ── */
-    [data-theme="light"] .overlay {
+    [data-theme="light"] .overlay,
+    [data-theme="light"] .modal-overlay {
       background: rgba(200,210,240,0.35);
     }
 

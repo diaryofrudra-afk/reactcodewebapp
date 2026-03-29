@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { calcHours, fmtHours, calcBill, fmtINR, todayISO, todayStr } from '../../utils';
+import { api } from '../../services/api';
 import type { TimesheetEntry } from '../../types';
 
 function fmt12(t: string): string {
@@ -16,7 +17,7 @@ function getAccHrs(ts: TimesheetEntry[], date: string, startTime: string): numbe
 }
 
 export function LoggerPage({ active }: { active: boolean }) {
-  const { state, setState, showToast, save, user } = useApp();
+  const { state, setState, showToast, user } = useApp();
   const { cranes, timesheets, operatorProfiles, files } = state;
 
   const [startTime, setStartTime] = useState('09:00');
@@ -33,12 +34,14 @@ export function LoggerPage({ active }: { active: boolean }) {
     ? calcBill(h, assigned, getAccHrs(myTs, todayStr(), startTime))
     : null;
 
-  const handleCommit = () => {
+  const handleCommit = async () => {
     if (!startTime || !endTime) return showToast('Set start and end times', 'error');
     if (!h || h <= 0) return showToast('Invalid time range', 'error');
+    const entryId = String(Date.now());
+    const dateISO = todayISO();
     const entry: TimesheetEntry = {
-      id: String(Date.now()),
-      date: todayStr(),
+      id: entryId,
+      date: dateISO,
       startTime,
       endTime,
       hoursDecimal: h,
@@ -48,29 +51,58 @@ export function LoggerPage({ active }: { active: boolean }) {
     setState(prev => {
       const uid = user || '';
       const existing = prev.timesheets[uid] || [];
+      const newAttendance = [...prev.attendance];
+      const existingAtt = newAttendance.findIndex(a => a.operator_key === uid && a.date === dateISO);
+      
+      const attRecord = {
+        id: `auto-${Date.now()}`,
+        operator_key: uid,
+        date: dateISO,
+        status: 'present',
+        marked_by: 'operator'
+      };
+
+      if (existingAtt >= 0) {
+        newAttendance[existingAtt] = { ...newAttendance[existingAtt], status: 'present' };
+      } else {
+        newAttendance.push(attRecord);
+      }
+
       return {
         ...prev,
         timesheets: {
           ...prev.timesheets,
           [uid]: [entry, ...existing],
         },
+        attendance: newAttendance,
       };
     });
-    save();
     setNotes('');
     const billMsg = bill ? ` · ${fmtINR(bill.total)}` : '';
     showToast(`Logged: ${fmt12(startTime)} → ${fmt12(endTime)}${billMsg}`);
     if (bill?.hasOT) showToast(`OT: +${fmtHours(bill.otH)}`, 'warn');
+    // Persist to backend
+    try {
+      await api.createTimesheet({
+        crane_reg: assigned?.reg || '',
+        operator_key: user || '',
+        date: dateISO,
+        start_time: startTime,
+        end_time: endTime,
+        hours_decimal: h,
+        operator_id: user || undefined,
+        notes,
+      });
+    } catch {
+      showToast('Failed to sync to server', 'error');
+    }
   };
 
   // Recalc on time changes (no-op — bill is derived reactively)
   useEffect(() => { /* reactive */ }, [startTime, endTime]);
 
   const todayISO_ = todayISO();
-  const todayEntries = myTs.filter(e => {
-    const d = (e as TimesheetEntry & { dateISO?: string }).dateISO || e.date;
-    return d === todayISO_ || e.date === todayStr();
-  });
+  const todayEntries = myTs.filter(e => e.date === todayISO_);
 
   return (
     <div className={`page ${active ? 'active' : ''}`} id="page-logger">

@@ -50,11 +50,43 @@ export function fmtHours(h: number | null | undefined): string {
 }
 
 export function todayStr(): string {
-  return new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return todayISO();
 }
 
 export function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Format an ISO date string (YYYY-MM-DD) as dd/mm/yyyy */
+export function fmtDate(d: string | undefined): string {
+  if (!d) return '—';
+  // Already dd/mm/yyyy
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) return d;
+  // ISO: YYYY-MM-DD
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  // Old format like "29 Mar 2026" — parse and convert
+  const parsed = new Date(d);
+  if (!isNaN(parsed.getTime())) {
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    return `${dd}/${mm}/${parsed.getFullYear()}`;
+  }
+  return d;
+}
+
+/** Normalize any date string to ISO (YYYY-MM-DD) format */
+export function toISO(d: string): string {
+  if (!d) return d;
+  // Already ISO
+  if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10);
+  // dd/mm/yyyy
+  const slashMatch = d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (slashMatch) return `${slashMatch[3]}-${slashMatch[2]}-${slashMatch[1]}`;
+  // Old "29 Mar 2026" style
+  const parsed = new Date(d);
+  if (!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return d;
 }
 
 export function getExpiryStatus(d: string | undefined): { l: string; c: string } {

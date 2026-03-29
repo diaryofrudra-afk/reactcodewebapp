@@ -1,9 +1,26 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { Modal } from '../../components/ui/Modal';
 import { fmtINR, fmtHours, calcBill, getExpiryStatus } from '../../utils';
-import type { Crane, TimesheetEntry } from '../../types';
+import { api } from '../../services/api';
+import type { Crane, TimesheetEntry, VehicleRTOLookup, ComplianceRecord } from '../../types';
+
+function complianceFromRto(v: VehicleRTOLookup): ComplianceRecord {
+  const rtoDate = v.tax_valid_upto || v.pucc_valid_upto || '';
+  const extra: string[] = [];
+  if (v.pucc_valid_upto && v.tax_valid_upto && v.pucc_valid_upto !== v.tax_valid_upto) {
+    extra.push(`PUC: ${v.pucc_valid_upto}`);
+  }
+  const hasRto = !!(rtoDate || extra.length);
+  return {
+    insurance: v.insurance_valid_upto
+      ? { date: v.insurance_valid_upto, notes: v.insurance_company || '' }
+      : undefined,
+    fitness: v.fitness_valid_upto ? { date: v.fitness_valid_upto } : undefined,
+    rto: hasRto ? { date: rtoDate, notes: extra.join(' · ') } : undefined,
+  };
+}
 
 function getAccHrs(entries: TimesheetEntry[], date: string, startTime: string): number {
   return entries
@@ -37,6 +54,48 @@ export function AssetsPage({ active }: { active: boolean }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editReg, setEditReg] = useState<string | null>(null);
   const [form, setForm] = useState({ ...BLANK_FORM });
+  const [assignReg, setAssignReg] = useState<string | null>(null);
+  const [selectedOp, setSelectedOp] = useState('');
+  const [rtoLookup, setRtoLookup] = useState<VehicleRTOLookup | null>(null);
+  const [rtoLoading, setRtoLoading] = useState(false);
+  const rtoFetchedFor = useRef('');
+
+  useEffect(() => {
+    if (modalOpen) {
+      rtoFetchedFor.current = '';
+      setRtoLookup(null);
+    }
+  }, [modalOpen]);
+
+  async function fetchVehicleRTO(opts?: { reg?: string; force?: boolean }) {
+    const raw = (opts?.reg ?? form.reg).trim().toUpperCase();
+    if (raw.length < 8) {
+      showToast('Enter at least 8 characters for the registration number', 'warn');
+      return;
+    }
+    if (!opts?.force && rtoFetchedFor.current === raw) return;
+    setRtoLoading(true);
+    console.log(`[RTO-Asset] Fetching: ${raw}`);
+    try {
+      const data = await api.lookupVehicle(raw);
+      console.log(`[RTO-Asset] Data received:`, data);
+      setRtoLookup(data);
+      rtoFetchedFor.current = raw;
+      setForm(prev => ({
+        ...prev,
+        reg: data.reg || raw,
+        type: data.vehicle_class || prev.type,
+        make: data.make || prev.make,
+        model: data.model || prev.model,
+        year: data.year || prev.year,
+      }));
+      showToast('Vehicle details loaded from RTO lookup', 'success');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'RTO lookup failed', 'error');
+    } finally {
+      setRtoLoading(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -76,11 +135,11 @@ export function AssetsPage({ active }: { active: boolean }) {
     setModalOpen(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     const reg = form.reg.trim().toUpperCase();
     if (!reg) return showToast('Registration ID required', 'error');
 
-    const newCrane: Crane = {
+    const craneData: Crane = {
       id: editReg || reg,
       reg,
       type: form.type,
@@ -96,26 +155,83 @@ export function AssetsPage({ active }: { active: boolean }) {
       notes: form.notes.trim(),
     };
 
-    if (editReg) {
-      setState(prev => ({
-        ...prev,
-        cranes: prev.cranes.map(c => c.reg === editReg ? { ...c, ...newCrane } : c),
-      }));
-      showToast(`${reg} updated`);
-    } else {
-      if (state.cranes.find(c => c.reg === reg)) return showToast('Registration already exists', 'error');
-      setState(prev => ({ ...prev, cranes: [...prev.cranes, newCrane] }));
-      showToast(`${reg} added`);
+    try {
+      if (editReg) {
+        const existing = state.cranes.find(c => c.reg === editReg);
+        if (existing) await api.updateCrane(existing.id, craneData);
+        setState(prev => ({
+          ...prev,
+          cranes: prev.cranes.map(c => c.reg === editReg ? { ...c, ...craneData } : c),
+        }));
+        showToast(`${reg} updated`);
+      } else {
+        if (state.cranes.find(c => c.reg === reg)) return showToast('Registration already exists', 'error');
+        const created = await api.createCrane(craneData);
+        craneData.id = created.id || reg;
+
+        let mergedComp: ComplianceRecord | null = null;
+        if (rtoLookup && rtoFetchedFor.current === reg) {
+          const comp = complianceFromRto(rtoLookup);
+          if (comp.insurance || comp.fitness || comp.rto) {
+            try {
+              await api.upsertCompliance(reg, comp);
+              mergedComp = comp;
+            } catch {
+              showToast('Asset saved; compliance dates could not be synced', 'warn');
+            }
+          }
+        }
+
+        setState(prev => ({
+          ...prev,
+          cranes: [...prev.cranes, craneData],
+          compliance: mergedComp ? { ...prev.compliance, [reg]: mergedComp } : prev.compliance,
+        }));
+        showToast(`${reg} added`);
+      }
+      save();
+      setModalOpen(false);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to save asset', 'error');
     }
-    save();
-    setModalOpen(false);
   }
 
-  function handleDelete(reg: string) {
+  async function handleDelete(reg: string) {
     if (!confirm(`Delete asset ${reg}?`)) return;
-    setState(prev => ({ ...prev, cranes: prev.cranes.filter(c => c.reg !== reg) }));
-    save();
-    showToast(`${reg} deleted`, 'info');
+    const crane = state.cranes.find(c => c.reg === reg);
+    if (!crane) return;
+    try {
+      await api.deleteCrane(crane.id);
+      setState(prev => ({ ...prev, cranes: prev.cranes.filter(c => c.reg !== reg) }));
+      showToast(`${reg} deleted`, 'info');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete asset', 'error');
+    }
+  }
+
+  function openAssign(reg: string) {
+    const crane = state.cranes.find(c => c.reg === reg);
+    setSelectedOp(crane?.operator || '');
+    setAssignReg(reg);
+  }
+
+  async function confirmAssign() {
+    if (!assignReg) return;
+    const crane = state.cranes.find(c => c.reg === assignReg);
+    if (!crane) return;
+    try {
+      await api.updateCrane(crane.id, { operator: selectedOp || '' });
+      setState(prev => ({
+        ...prev,
+        cranes: prev.cranes.map(c =>
+          c.reg === assignReg ? { ...c, operator: selectedOp } : c
+        ),
+      }));
+      showToast(selectedOp ? `${assignReg} assigned` : `${assignReg} set to standby`, 'info');
+      setAssignReg(null);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to assign', 'error');
+    }
   }
 
   function f(k: keyof typeof form, v: string) {
@@ -186,6 +302,14 @@ export function AssetsPage({ active }: { active: boolean }) {
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                     </svg>
                   </button>
+                  {!op && (
+                    <button className="ca-btn c-acc" title="Assign Operator" onClick={() => openAssign(crane.reg)}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                    </button>
+                  )}
                   <button className="ca-btn c-red ar-del" title="Delete" onClick={() => handleDelete(crane.reg)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
                       <polyline points="3 6 5 6 21 6" />
@@ -204,7 +328,38 @@ export function AssetsPage({ active }: { active: boolean }) {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editReg ? `Edit — ${editReg}` : 'Add Fleet Asset'}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <label className="lbl">Registration *</label>
-          <input className="inp" placeholder="e.g. MH12AB1234" value={form.reg} onChange={e => f('reg', e.target.value)} disabled={!!editReg} />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input
+              className="inp"
+              style={{ flex: 1 }}
+              placeholder="e.g. MH12AB1234 — tab out to auto-fetch"
+              value={form.reg}
+              disabled={!!editReg}
+              onChange={e => {
+                const v = e.target.value.toUpperCase();
+                f('reg', v);
+                if (v.length === 10) void fetchVehicleRTO({ reg: v });
+              }}
+              onBlur={e => {
+                const v = e.target.value.trim();
+                if (v.length >= 8) void fetchVehicleRTO({ reg: v });
+              }}
+            />
+            <button
+              type="button"
+              className="btn-sm accent"
+              disabled={rtoLoading}
+              onClick={() => void fetchVehicleRTO({ force: true })}
+            >
+              {rtoLoading ? '…' : 'RTO API check'}
+            </button>
+          </div>
+          {rtoLookup?.fuel_type && (
+            <div style={{ fontSize: '11px', color: 'var(--t3)' }}>
+              Fuel: {rtoLookup.fuel_type}
+              {rtoLookup.chassis_masked ? ` · Chassis: ${rtoLookup.chassis_masked}` : ''}
+            </div>
+          )}
           <label className="lbl">Type</label>
           <input className="inp" placeholder="e.g. Crane, Excavator" value={form.type} onChange={e => f('type', e.target.value)} />
           <label className="lbl">Make</label>
@@ -221,6 +376,20 @@ export function AssetsPage({ active }: { active: boolean }) {
           <input className="inp" type="number" placeholder="Leave blank = same as rate" value={form.otRate} onChange={e => f('otRate', e.target.value)} />
           <label className="lbl">Daily Limit (hrs)</label>
           <input className="inp" type="number" value={form.dailyLimit} onChange={e => f('dailyLimit', e.target.value)} />
+          <label className="lbl">Assign Operator</label>
+          <select className="inp" value={form.operator} onChange={e => f('operator', e.target.value)}>
+            <option value="">— Leave unassigned —</option>
+            {state.operators.map(op => {
+              const profile = state.operatorProfiles[op.phone] || state.operatorProfiles[op.id] || {};
+              const name = (profile as { name?: string }).name;
+              const taken = state.cranes.find(c => c.operator === op.phone && c.reg !== editReg);
+              return (
+                <option key={op.id} value={op.phone}>
+                  {name ? `${name} · ` : ''}{op.phone}{taken ? ` (on ${taken.reg})` : ''}
+                </option>
+              );
+            })}
+          </select>
           <label className="lbl">Site</label>
           <input className="inp" placeholder="Site/location" value={form.site} onChange={e => f('site', e.target.value)} />
           <label className="lbl">Notes</label>
@@ -230,6 +399,29 @@ export function AssetsPage({ active }: { active: boolean }) {
               {editReg ? 'Save Changes' : 'Deploy Asset'}
             </button>
             <button className="btn-sm outline" onClick={() => setModalOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!assignReg} onClose={() => setAssignReg(null)} title={`Assign Operator — ${assignReg}`}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <label className="lbl">Select Operator</label>
+          <select className="inp" value={selectedOp} onChange={e => setSelectedOp(e.target.value)}>
+            <option value="">— Leave unassigned —</option>
+            {state.operators.map(op => {
+              const profile = state.operatorProfiles[op.phone] || state.operatorProfiles[op.id] || {};
+              const name = (profile as { name?: string }).name;
+              const taken = state.cranes.find(c => c.operator === op.phone && c.reg !== assignReg);
+              return (
+                <option key={op.id} value={op.phone}>
+                  {name ? `${name} · ` : ''}{op.phone}{taken ? ` (on ${taken.reg})` : ''}
+                </option>
+              );
+            })}
+          </select>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <button className="btn-sm accent" onClick={confirmAssign}>Assign</button>
+            <button className="btn-sm outline" onClick={() => setAssignReg(null)}>Cancel</button>
           </div>
         </div>
       </Modal>

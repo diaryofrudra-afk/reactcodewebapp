@@ -1,5 +1,6 @@
 import { useApp } from '../../context/AppContext';
-import { calcBill, fmtINR, fmtHours, todayISO } from '../../utils';
+import { calcBill, fmtINR, fmtHours, todayISO, fmtDate } from '../../utils';
+import { api } from '../../services/api';
 import type { TimesheetEntry } from '../../types';
 
 function fmt12(t: string): string {
@@ -15,7 +16,7 @@ function getAccHrs(ts: TimesheetEntry[], date: string, startTime: string): numbe
 }
 
 export function OpHistoryPage({ active }: { active: boolean }) {
-  const { state, setState, showToast, save, user } = useApp();
+  const { state, setState, showToast, user } = useApp();
   const { timesheets, cranes, files } = state;
 
   const myTs: TimesheetEntry[] = user ? (timesheets[user] || []) : [];
@@ -23,19 +24,30 @@ export function OpHistoryPage({ active }: { active: boolean }) {
   const crane = cranes.find(c => c.operator === user);
   const hasRate = !!(crane && crane.rate);
 
-  const deleteEntry = (id: string) => {
+  const deleteEntry = async (id: string) => {
     if (!confirm('Remove this entry?')) return;
+    const uid = user || '';
+    const entry = myTs.find(e => e.id === id);
     setState(prev => {
-      const uid = user || '';
+      const remaining = (prev.timesheets[uid] || []).filter(e => e.id !== id);
+      let attendance = prev.attendance;
+      // If no other entries remain for this date, remove auto-marked attendance
+      if (entry && !remaining.some(e => e.date === entry.date)) {
+        attendance = attendance.filter(a =>
+          !(a.operator_key === uid && a.date === entry.date && a.marked_by === 'operator')
+        );
+      }
       return {
         ...prev,
-        timesheets: {
-          ...prev.timesheets,
-          [uid]: (prev.timesheets[uid] || []).filter(e => e.id !== id),
-        },
+        timesheets: { ...prev.timesheets, [uid]: remaining },
+        attendance,
       };
     });
-    save();
+    try {
+      await api.deleteTimesheet(id);
+    } catch {
+      showToast('Failed to delete from server', 'error');
+    }
   };
 
   const exportXlsx = () => {
@@ -94,7 +106,7 @@ export function OpHistoryPage({ active }: { active: boolean }) {
                   const b = hasRate && crane ? calcBill(eh, crane, getAccHrs(myTs, e.date, e.startTime)) : null;
                   return (
                     <tr key={e.id}>
-                      <td style={{ fontWeight: 700 }}>{e.date}</td>
+                      <td style={{ fontWeight: 700 }}>{fmtDate(e.date)}</td>
                       <td>{fmt12(e.startTime)}</td>
                       <td>{fmt12(e.endTime)}</td>
                       <td>

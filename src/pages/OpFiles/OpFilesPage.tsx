@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { todayISO } from '../../utils';
+import { api } from '../../services/api';
 
 const MAX_SZ = 5 * 1024 * 1024; // 5MB
 
@@ -14,7 +15,7 @@ interface StoredFile {
 }
 
 export function OpFilesPage({ active }: { active: boolean }) {
-  const { state, setState, showToast, save, user } = useApp();
+  const { state, setState, showToast, user } = useApp();
   const { files } = state;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -24,7 +25,7 @@ export function OpFilesPage({ active }: { active: boolean }) {
     if (!file) return;
     if (file.size > MAX_SZ) return showToast('Max 5MB', 'error');
     const reader = new FileReader();
-    reader.onload = ev => {
+    reader.onload = async ev => {
       const fd: StoredFile = {
         id: String(Date.now()),
         name: file.name,
@@ -43,15 +44,27 @@ export function OpFilesPage({ active }: { active: boolean }) {
           },
         };
       });
-      save();
       showToast('File stored.');
       if (fileInputRef.current) fileInputRef.current.value = '';
+      // Persist to backend
+      try {
+        await api.createFile({
+          owner_key: user || '',
+          name: fd.name,
+          type: fd.type,
+          data: fd.data,
+          size: fd.size,
+          timestamp: fd.timestamp,
+        });
+      } catch {
+        showToast('Failed to sync file to server', 'error');
+      }
     };
     reader.onerror = () => showToast('Read failed', 'error');
     reader.readAsDataURL(file);
   };
 
-  const deleteFile = (id: string) => {
+  const deleteFile = async (id: string) => {
     const f = myFiles.find(x => x.id === id);
     if (!confirm(`Remove "${f ? f.name : 'this file'}"?`)) return;
     setState(prev => {
@@ -64,7 +77,11 @@ export function OpFilesPage({ active }: { active: boolean }) {
         },
       };
     });
-    save();
+    try {
+      await api.deleteFile(id);
+    } catch {
+      showToast('Failed to delete from server', 'error');
+    }
   };
 
   const exportXlsx = () => {

@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { SearchBar } from '../../components/ui/SearchBar';
 import { Modal } from '../../components/ui/Modal';
 import { fmtINR, fmtHours, calcBill } from '../../utils';
+import { api } from '../../services/api';
 import type { Operator, TimesheetEntry } from '../../types';
 
 function getAccHrs(entries: TimesheetEntry[], date: string, startTime: string): number {
@@ -14,11 +15,13 @@ function getAccHrs(entries: TimesheetEntry[], date: string, startTime: string): 
 const BLANK_FORM = { name: '', phone: '', license: '', aadhaar: '' };
 
 export function OperatorsPage({ active }: { active: boolean }) {
-  const { state, setState, save, showToast } = useApp();
+  const { state, setState, showToast } = useApp();
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...BLANK_FORM });
+  const [assignOpId, setAssignOpId] = useState<string | null>(null);
+  const [selectedCrane, setSelectedCrane] = useState('');
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -50,46 +53,96 @@ export function OperatorsPage({ active }: { active: boolean }) {
     setModalOpen(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     const name = form.name.trim();
     const phone = form.phone.trim();
     if (!name) return showToast('Name required', 'error');
     if (!phone) return showToast('Phone required', 'error');
 
-    if (editId) {
-      setState(prev => ({
-        ...prev,
-        operators: prev.operators.map(o =>
-          o.id === editId
-            ? { ...o, name, phone, license: form.license.trim(), aadhaar: form.aadhaar.trim() }
-            : o
-        ),
-      }));
-      showToast('Operator updated');
-    } else {
-      if (state.operators.find(o => o.phone === phone)) return showToast('Phone already registered', 'error');
-      const newOp: Operator = {
-        id: String(Date.now()),
-        name,
-        phone,
-        license: form.license.trim(),
-        aadhaar: form.aadhaar.trim(),
-        status: 'active',
-      };
-      setState(prev => ({ ...prev, operators: [...prev.operators, newOp] }));
-      showToast(`${name} added`);
+    try {
+      if (editId) {
+        await api.updateOperator(editId, { name, phone, license: form.license.trim(), aadhaar: form.aadhaar.trim() });
+        setState(prev => ({
+          ...prev,
+          operators: prev.operators.map(o =>
+            o.id === editId
+              ? { ...o, name, phone, license: form.license.trim(), aadhaar: form.aadhaar.trim() }
+              : o
+          ),
+        }));
+        showToast('Operator updated');
+      } else {
+        if (state.operators.find(o => o.phone === phone)) return showToast('Phone already registered', 'error');
+        const created = await api.createOperator({ name, phone, license: form.license.trim(), aadhaar: form.aadhaar.trim(), status: 'active' });
+        const newOp: Operator = {
+          id: created.id || String(Date.now()),
+          name,
+          phone,
+          license: form.license.trim(),
+          aadhaar: form.aadhaar.trim(),
+          status: 'active',
+        };
+        setState(prev => ({ ...prev, operators: [...prev.operators, newOp] }));
+        showToast(`${name} added`);
+      }
+      setModalOpen(false);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to save operator', 'error');
     }
-    save();
-    setModalOpen(false);
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
     const op = state.operators.find(o => o.id === id);
     if (!op) return;
     if (!confirm(`Delete operator ${op.name}?`)) return;
-    setState(prev => ({ ...prev, operators: prev.operators.filter(o => o.id !== id) }));
-    save();
-    showToast(`${op.name} deleted`, 'info');
+    try {
+      await api.deleteOperator(id);
+      setState(prev => ({ ...prev, operators: prev.operators.filter(o => o.id !== id) }));
+      showToast(`${op.name} deleted`, 'info');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete operator', 'error');
+    }
+  }
+
+  function openAssign(opId: string) {
+    const op = state.operators.find(o => o.id === opId);
+    if (!op) return;
+    const alreadyOn = state.cranes.find(c => c.operator === op.phone || c.operator === op.id);
+    setSelectedCrane(alreadyOn?.reg || '');
+    setAssignOpId(opId);
+  }
+
+  async function confirmAssign() {
+    if (!assignOpId) return;
+    const op = state.operators.find(o => o.id === assignOpId);
+    if (!op) return;
+    const opKey = op.phone;
+    try {
+      // Unassign from current crane if any
+      const currentCrane = state.cranes.find(c => c.operator === opKey);
+      if (currentCrane) {
+        await api.updateCrane(currentCrane.id, { operator: '' });
+      }
+      // Assign to new crane if selected
+      if (selectedCrane) {
+        const newCrane = state.cranes.find(c => c.reg === selectedCrane);
+        if (newCrane) {
+          await api.updateCrane(newCrane.id, { operator: opKey });
+        }
+      }
+      setState(prev => ({
+        ...prev,
+        cranes: prev.cranes.map(c => {
+          if (c.operator === opKey) return { ...c, operator: '' };
+          if (c.reg === selectedCrane) return { ...c, operator: opKey };
+          return c;
+        }),
+      }));
+      showToast(selectedCrane ? `${op.name} assigned to ${selectedCrane}` : `${op.name} unassigned`, 'info');
+      setAssignOpId(null);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to assign', 'error');
+    }
   }
 
   function f(k: keyof typeof form, v: string) {
@@ -157,6 +210,13 @@ export function OperatorsPage({ active }: { active: boolean }) {
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                     </svg>
                   </button>
+                  {!crane && (
+                    <button className="ca-btn c-acc" title="Assign to Asset" onClick={() => openAssign(op.id)}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
+                        <path d="M2 20h20" /><path d="M10 4v16" /><path d="M10 4l8 4" /><path d="M18 8v12" />
+                      </svg>
+                    </button>
+                  )}
                   <button className="ca-btn c-red opr-del" title="Delete" onClick={() => handleDelete(op.id)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
                       <polyline points="3 6 5 6 21 6" />
@@ -185,6 +245,28 @@ export function OperatorsPage({ active }: { active: boolean }) {
           <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
             <button className="btn-sm accent" onClick={handleSave}>{editId ? 'Save Changes' : 'Add Operator'}</button>
             <button className="btn-sm outline" onClick={() => setModalOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!assignOpId} onClose={() => setAssignOpId(null)} title={`Assign to Asset — ${state.operators.find(o => o.id === assignOpId)?.name || ''}`}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <label className="lbl">Select Asset</label>
+          <select className="inp" value={selectedCrane} onChange={e => setSelectedCrane(e.target.value)}>
+            <option value="">— Leave unassigned —</option>
+            {state.cranes.map(c => {
+              const takenBy = c.operator && c.operator !== (state.operators.find(o => o.id === assignOpId)?.phone || '');
+              const takenOp = takenBy ? state.operators.find(o => o.phone === c.operator) : null;
+              return (
+                <option key={c.reg} value={c.reg}>
+                  {c.reg}{c.make ? ` · ${c.make}` : ''}{c.model ? ` ${c.model}` : ''}{takenOp ? ` (${takenOp.name})` : c.operator && takenBy ? ` (${c.operator})` : ''}
+                </option>
+              );
+            })}
+          </select>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <button className="btn-sm accent" onClick={confirmAssign}>Assign</button>
+            <button className="btn-sm outline" onClick={() => setAssignOpId(null)}>Cancel</button>
           </div>
         </div>
       </Modal>

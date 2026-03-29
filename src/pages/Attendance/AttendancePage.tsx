@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { todayISO } from '../../utils';
+import { todayISO, toISO } from '../../utils';
+import { api } from '../../services/api';
+import type { TimesheetEntry, AppState } from '../../types';
 
 function getMonthOptions(): Array<{ value: string; label: string }> {
   const now = new Date();
@@ -15,9 +17,95 @@ function getMonthOptions(): Array<{ value: string; label: string }> {
 }
 
 export function AttendancePage({ active }: { active: boolean }) {
-  const { state } = useApp();
+  const { state, setState, showToast, save } = useApp();
   const monthOptions = useMemo(() => getMonthOptions(), []);
   const [selectedMonth, setSelectedMonth] = useState(monthOptions[0].value);
+  const lastFetch = useRef(0);
+
+  // Refresh timesheets and attendance from API when page becomes active (at most once per 15s)
+  useEffect(() => {
+    if (!active) return;
+    if (Date.now() - lastFetch.current < 15000) return;
+    lastFetch.current = Date.now();
+    
+    Promise.all([api.exportAll(), api.getAttendance()])
+      .then(([rawAll, attRaw]) => {
+        const data = rawAll as AppState;
+        const tsRaw = data.timesheets as Record<string, any> | undefined;
+        
+        const timesheets: Record<string, TimesheetEntry[]> = {};
+        if (tsRaw && typeof tsRaw === 'object') {
+          for (const [key, entries] of Object.entries(tsRaw)) {
+            timesheets[key] = (entries || []).map((t: any) => ({
+              id: (t.id || '') as string,
+              date: toISO((t.date || '') as string),
+              startTime: (t.start_time ?? t.startTime ?? '') as string,
+              endTime: (t.end_time ?? t.endTime ?? '') as string,
+              hoursDecimal: (t.hours_decimal ?? t.hoursDecimal ?? 0) as number,
+              operatorId: (t.operator_id ?? t.operatorId) as string | undefined,
+              notes: (t.notes ?? '') as string,
+            }));
+          }
+        }
+
+        const attendance = (attRaw as any[]).map(a => ({
+          id: String(a.id),
+          operator_key: String(a.operator_key),
+          date: String(a.date),
+          status: String(a.status),
+          marked_by: String(a.marked_by),
+        }));
+
+        setState(prev => ({ ...prev, timesheets, attendance }));
+      })
+      .catch(() => {});
+  }, [active, setState]);
+
+  async function toggleAttendance(opKey: string, date: string, currentPresent: boolean) {
+    console.log(`[Attendance] Toggling ${opKey} on ${date}. Current: ${currentPresent}`);
+    const existingManual = state.attendance.find(a => a.operator_key === opKey && a.date === date);
+    
+    try {
+      if (currentPresent) {
+        showToast(`Marking ${date} as Absent...`, 'info');
+        const res = await api.markAttendance({ operator_key: opKey, date, status: 'absent', marked_by: 'owner' });
+        setState(prev => ({
+          ...prev,
+          attendance: [...prev.attendance.filter(a => !(a.operator_key === opKey && a.date === date)), {
+            id: String(res.id),
+            operator_key: String(res.operator_key),
+            date: String(res.date),
+            status: String(res.status),
+            marked_by: String(res.marked_by),
+          }]
+        }));
+      } else if (existingManual && existingManual.status === 'absent') {
+        showToast(`Clearing override for ${date}...`, 'info');
+        await api.unmarkAttendance(opKey, date);
+        setState(prev => ({
+          ...prev,
+          attendance: prev.attendance.filter(a => !(a.operator_key === opKey && a.date === date))
+        }));
+      } else {
+        showToast(`Marking ${date} as Present...`, 'info');
+        const res = await api.markAttendance({ operator_key: opKey, date, status: 'present', marked_by: 'owner' });
+        setState(prev => ({
+          ...prev,
+          attendance: [...prev.attendance.filter(a => !(a.operator_key === opKey && a.date === date)), {
+            id: String(res.id),
+            operator_key: String(res.operator_key),
+            date: String(res.date),
+            status: String(res.status),
+            marked_by: String(res.marked_by),
+          }]
+        }));
+      }
+      setTimeout(save, 100);
+    } catch (e) {
+      console.error('Failed to toggle attendance', e);
+      showToast('Attendance sync failed', 'error');
+    }
+  }
 
   const [yr, mo] = selectedMonth.split('-').map(Number);
   const daysInMonth = new Date(yr, mo, 0).getDate();
@@ -70,10 +158,30 @@ export function AttendancePage({ active }: { active: boolean }) {
           const phone = operator.phone;
           const profile = state.operatorProfiles[phone] || {};
           const profileAny = profile as Record<string, unknown>;
-          const att: Record<string, { present?: boolean; source?: string }> = (profileAny.attendance as Record<string, { present?: boolean; source?: string }>) || {};
           const salary = Number(profileAny.salary) || 0;
           const workDays = Number(profileAny.workingDays) || 26;
           const crane = state.cranes.find(c => c.operator === phone || c.operator === operator.id);
+
+          // Build per-day hours map from timesheets
+          const dayHoursMap: Record<string, number> = {};
+          (state.timesheets[phone] || state.timesheets[operator.id] || []).forEach(e => {
+            const iso = toISO(e.date);
+            if (iso) dayHoursMap[iso] = (dayHoursMap[iso] || 0) + (Number(e.hoursDecimal) || 0);
+          });
+
+          // Auto-mark attendance from timesheets: if hours logged on a day, mark as present
+          const att: Record<string, { present?: boolean; source?: string }> = {};
+          for (const [iso, hrs] of Object.entries(dayHoursMap)) {
+            if (hrs > 0) att[iso] = { present: true, source: 'timesheet' };
+          }
+          // Merge manual attendance - MANUAL OVERRIDES AUTO
+          state.attendance.filter(a => a.operator_key === phone).forEach(a => {
+            if (a.status === 'present') {
+              att[a.date] = { present: true, source: 'manual' };
+            } else if (a.status === 'absent') {
+              att[a.date] = { present: false, source: 'manual' };
+            }
+          });
 
           // Count present days
           let presentCount = 0;
@@ -85,12 +193,7 @@ export function AttendancePage({ active }: { active: boolean }) {
           const perDay = workDays > 0 ? salary / workDays : 0;
           const earnedGross = Math.round(perDay * presentCount);
 
-          // Build per-day hours map from timesheets
-          const dayHours: Record<string, number> = {};
-          (state.timesheets[phone] || []).forEach(e => {
-            const iso = e.date;
-            if (iso) dayHours[iso] = (dayHours[iso] || 0) + (Number(e.hoursDecimal) || 0);
-          });
+          const dayHours = dayHoursMap;
           const targetHrs = 8;
 
           const initials = operator.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || phone.slice(-2);
@@ -106,21 +209,35 @@ export function AttendancePage({ active }: { active: boolean }) {
             const isFuture = iso > today;
             const isToday = iso === today;
             const hrs = dayHours[iso] || 0;
+            const isManualAbsent = att[iso]?.present === false;
+            const isManualPresent = att[iso]?.present === true && att[iso]?.source === 'manual';
+            
             const pct = isPresent ? Math.min(100, Math.max(hrs > 0 ? (hrs / targetHrs * 100) : (isPresent ? 100 : 0), isPresent ? 15 : 0)) : 0;
             const isOT = hrs > targetHrs;
             const isFull = pct >= 100;
             const isPartial = pct > 0 && pct < 100;
-            const arcColor = isOT ? 'var(--green)' : 'var(--accent)';
-            const trackColor = isFuture ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.07)';
+            const arcColor = isOT ? 'var(--green)' : isPresent ? 'var(--accent)' : 'transparent';
+            const trackColor = isManualAbsent ? 'var(--red-s)' : isFuture ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.07)';
             const offset = (circ * (1 - pct / 100)).toFixed(2);
-            const cellClass = `att-ring-cell${isFuture ? ' future' : ''}${isOT ? ' ot-day' : isFull ? ' full-day' : isPartial ? ' partial-day' : ''}`;
-            const textColor = isOT ? 'var(--green)' : isPresent ? 'var(--accent)' : isFuture ? 'rgba(255,255,255,0.18)' : 'var(--t4)';
+            const cellClass = `att-ring-cell${isFuture ? ' future' : ''}${isOT ? ' ot-day' : isFull ? ' full-day' : isPartial ? ' partial-day' : ''}${isManualAbsent ? ' manual-absent' : ''}`;
+            const textColor = isManualAbsent ? 'var(--red)' : isOT ? 'var(--green)' : isPresent ? 'var(--accent)' : isFuture ? 'rgba(255,255,255,0.18)' : 'var(--t4)';
             const fontW = isToday ? '800' : isPresent ? '700' : '500';
 
             calCells.push(
-              <div key={iso} className={cellClass} title={isPresent ? `Present${hrs > 0 ? ` · ${hrs.toFixed(1)}h` : ''}` : isFuture ? '' : 'Absent'}>
-                <svg viewBox="0 0 36 36" width="38" height="38">
-                  <circle cx="18" cy="18" r="12" fill="none" stroke={trackColor} strokeWidth="4" />
+              <div
+                key={iso}
+                className={cellClass}
+                title={isManualAbsent ? 'Forced Absent' : isPresent ? `Present${hrs > 0 ? ` · ${hrs.toFixed(1)}h` : ''}` : isFuture ? '' : 'Absent'}
+                style={{ cursor: isFuture ? 'default' : 'pointer', position: 'relative', userSelect: 'none' }}
+                onMouseDown={(e) => {
+                  if (isFuture) return;
+                  e.preventDefault(); e.stopPropagation();
+                  console.log(`[UI] Clicked cell: ${iso} for ${phone}`);
+                  void toggleAttendance(phone, iso, !!isPresent);
+                }}
+              >
+                <svg viewBox="0 0 36 36" width="38" height="38" style={{ pointerEvents: 'none' }}>
+                  <circle cx="18" cy="18" r="12" fill={isManualPresent ? 'var(--accent-s)' : 'none'} stroke={trackColor} strokeWidth="4" />
                   {pct > 0 && (
                     <circle
                       cx="18" cy="18" r="12" fill="none"
@@ -130,15 +247,16 @@ export function AttendancePage({ active }: { active: boolean }) {
                       transform="rotate(-90 18 18)"
                     />
                   )}
-                  {isToday && <circle cx="18" cy="18" r="7" fill="var(--accent)" opacity="0.18" />}
+                  {isToday && !isManualAbsent && <circle cx="18" cy="18" r="7" fill="var(--accent)" opacity="0.18" />}
                   <text
                     x="18" y="18" textAnchor="middle" dominantBaseline="central"
                     fontSize={d >= 10 ? '7.5' : '8.5'} fontWeight={fontW}
-                    fontFamily="var(--fm)" fill={isToday ? 'var(--accent)' : textColor}
+                    fontFamily="var(--fm)" fill={isToday && !isManualAbsent ? 'var(--accent)' : textColor}
                   >
                     {d}
                   </text>
                 </svg>
+                {isManualPresent && <div style={{ position: 'absolute', top: '4px', right: '4px', width: '4px', height: '4px', background: 'var(--accent)', borderRadius: '50%' }} />}
               </div>
             );
           }

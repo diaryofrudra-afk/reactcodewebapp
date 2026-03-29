@@ -9,11 +9,20 @@ import { SidebarUser } from './SidebarUser';
 
 function FleetIcon(): ReactNode {
   return (
-    <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
-      <path d="M2 20h20" />
-      <path d="M10 4v16" />
-      <path d="M10 4l8 4" />
-      <path d="M18 8v12" />
+    <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      {/* Base / tracks */}
+      <path d="M2 21h14" />
+      <rect x="3" y="18" width="12" height="3" rx="1.5" />
+      {/* Cabin */}
+      <rect x="9" y="13" width="5" height="5" rx="0.5" />
+      <line x1="10.5" y1="13" x2="10.5" y2="18" />
+      {/* Boom arm */}
+      <line x1="11" y1="13" x2="3" y2="4" />
+      {/* Hook cable + hook */}
+      <line x1="3" y1="4" x2="3" y2="8" />
+      <path d="M2 8.5a1.2 1.2 0 1 0 2 0" />
+      {/* Boom support strut */}
+      <line x1="7" y1="18" x2="6" y2="9" />
     </svg>
   );
 }
@@ -48,10 +57,11 @@ function GpsIcon(): ReactNode {
 function FuelIcon(): ReactNode {
   return (
     <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
-      <path d="M3 22V8l7-6 7 6v14" />
-      <rect x="9" y="12" width="4" height="10" />
-      <path d="M17 8h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2" />
-      <path d="M19 8V5" />
+      <path d="M3 22V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v15" />
+      <path d="M6 9h6v4H6z" />
+      <path d="M17 10h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+      <circle cx="19" cy="8" r="1" fill="currentColor" />
+      <path d="M19 18v3" />
     </svg>
   );
 }
@@ -151,8 +161,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onSignOut }: SidebarProps) {
-  const { sidebarCollapsed, toggleTheme, user } = useApp();
-  const isOwner = user === '9010719021';
+  const { sidebarCollapsed, toggleTheme, userRole } = useApp();
+  const isOwner = userRole === 'owner';
 
   return (
     <aside className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`} id="sidebar">

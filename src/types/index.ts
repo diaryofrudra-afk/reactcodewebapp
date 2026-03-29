@@ -14,7 +14,9 @@ export interface Crane {
   year?: string;
   rate: number;
   otRate?: number;
+  ot_rate?: number;
   dailyLimit?: number;
+  daily_limit?: number;
   operator?: string;
   site?: string;
   status?: string;
@@ -44,6 +46,7 @@ export interface OperatorProfile {
 export interface OwnerProfile {
   name: string;
   roleTitle: string;
+  role_title?: string;
   phone: string;
   email: string;
   company: string;
@@ -52,6 +55,7 @@ export interface OwnerProfile {
   gst: string;
   website: string;
   defaultLimit: string;
+  default_limit?: string;
 }
 
 export interface FuelEntry {
@@ -83,6 +87,7 @@ export interface Client {
   phone?: string;
   email?: string;
   contactPerson?: string;
+  contact_person?: string;
 }
 
 export interface InvoiceItem {
@@ -97,8 +102,11 @@ export interface Invoice {
   number: string;
   date: string;
   dueDate?: string;
+  due_date?: string;
   clientId: string;
+  client_id?: string;
   assetReg?: string;
+  asset_reg?: string;
   items: InvoiceItem[];
   subtotal: number;
   sgst: number;
@@ -106,12 +114,14 @@ export interface Invoice {
   total: number;
   status: 'draft' | 'sent' | 'paid' | 'partial' | 'overdue';
   paidAmount?: number;
+  paid_amount?: number;
   notes?: string;
 }
 
 export interface Payment {
   id: string;
   invoiceId: string;
+  invoice_id?: string;
   date: string;
   amount: number;
   method?: string;
@@ -123,6 +133,7 @@ export interface CreditNote {
   number: string;
   date: string;
   invoiceId: string;
+  invoice_id?: string;
   amount: number;
   reason?: string;
 }
@@ -132,8 +143,11 @@ export interface Quotation {
   number: string;
   date: string;
   validUntil?: string;
+  valid_until?: string;
   clientId: string;
+  client_id?: string;
   assetReg?: string;
+  asset_reg?: string;
   items: InvoiceItem[];
   subtotal: number;
   sgst: number;
@@ -148,7 +162,9 @@ export interface Proforma {
   number: string;
   date: string;
   clientId: string;
+  client_id?: string;
   assetReg?: string;
+  asset_reg?: string;
   items: InvoiceItem[];
   subtotal: number;
   sgst: number;
@@ -156,6 +172,7 @@ export interface Proforma {
   total: number;
   status: string;
   quotationId?: string;
+  quotation_id?: string;
   notes?: string;
 }
 
@@ -164,7 +181,9 @@ export interface Challan {
   number: string;
   date: string;
   clientId: string;
+  client_id?: string;
   assetReg?: string;
+  asset_reg?: string;
   site?: string;
   items: InvoiceItem[];
   status: string;
@@ -175,9 +194,15 @@ export interface TimesheetEntry {
   id: string;
   date: string;
   startTime: string;
+  start_time?: string;
   endTime: string;
+  end_time?: string;
   hoursDecimal: number;
+  hours_decimal?: number;
   operatorId?: string;
+  operator_id?: string;
+  crane_reg?: string;
+  operator_key?: string;
   notes?: string;
 }
 
@@ -193,10 +218,29 @@ export interface MaintenanceRecord {
 
 export interface Notification {
   id: string;
+  user_key?: string;
   message: string;
   type: 'info' | 'warn' | 'error' | 'success';
   timestamp: string;
   read?: boolean;
+}
+
+/** Response from GET /api/vehicle-lookup (Indian RTO-style lookup). */
+export interface VehicleRTOLookup {
+  reg: string;
+  make: string;
+  model: string;
+  year: string;
+  vehicle_class: string;
+  fuel_type?: string;
+  insurance_valid_upto?: string | null;
+  insurance_company?: string;
+  fitness_valid_upto?: string | null;
+  tax_valid_upto?: string | null;
+  pucc_valid_upto?: string | null;
+  owner_name?: string;
+  chassis_masked?: string;
+  raw?: Record<string, unknown>;
 }
 
 export interface BlackbuckVehicle {
@@ -212,6 +256,14 @@ export interface BlackbuckVehicle {
 export interface BlackbuckData {
   vehicles: BlackbuckVehicle[];
   [key: string]: unknown;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  operator_key: string;
+  date: string;
+  status: string;
+  marked_by: string;
 }
 
 export interface AppState {
@@ -234,6 +286,7 @@ export interface AppState {
   files: Record<string, unknown[]>;
   timesheets: Record<string, TimesheetEntry[]>;
   compliance: Record<string, ComplianceRecord>;
+  attendance: AttendanceRecord[];
   maintenance: MaintenanceRecord;
   notifications: Notification[];
   opNotifications: Record<string, Notification[]>;

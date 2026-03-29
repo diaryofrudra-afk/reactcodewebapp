@@ -52,6 +52,7 @@ export function GPSPage({ active }: { active: boolean }) {
                 <th>Registration</th>
                 <th>Status</th>
                 <th>Speed</th>
+                <th>Coordinates</th>
                 <th>Last Updated</th>
               </tr>
             </thead>
@@ -60,11 +61,21 @@ export function GPSPage({ active }: { active: boolean }) {
                 <tr key={v.registration_number}>
                   <td style={{ fontWeight: 700 }}>{v.registration_number}</td>
                   <td>
-                    <span className={`badge ${v.status === 'moving' ? 'green' : v.status === 'stopped' ? 'red' : ''}`}>
-                      {v.status}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className={`badge ${v.status === 'moving' ? 'green' : v.status === 'stopped' ? 'red' : ''}`}>
+                        {v.status}
+                      </span>
+                      {v.status === 'moving' && <span className="pulse-dot" title="Live updates active" />}
+                    </div>
                   </td>
                   <td>{v.speed != null ? `${v.speed} km/h` : '—'}</td>
+                  <td style={{ fontFamily: 'var(--fm)', fontSize: '10px' }}>
+                    {v.latitude != null && v.longitude != null ? (
+                      <span style={{ color: 'var(--accent)' }}>
+                        {v.latitude.toFixed(4)}, {v.longitude.toFixed(4)}
+                      </span>
+                    ) : '—'}
+                  </td>
                   <td style={{ fontSize: '10px', color: 'var(--t3)' }}>{v.last_updated || '—'}</td>
                 </tr>
               ))}
@@ -73,22 +84,108 @@ export function GPSPage({ active }: { active: boolean }) {
         </div>
       ) : null}
 
-      <div className="gps-iframe-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '40px', background: 'var(--bg2)', borderRadius: 'var(--rlg)', border: '1px solid var(--border)' }}>
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" strokeWidth="1.5" strokeLinecap="round">
-          <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-        </svg>
-        <div style={{ fontSize: '13px', color: 'var(--t3)', textAlign: 'center' }}>
-          Blackbuck live map cannot be embedded due to browser security restrictions.
+      {vehicles.length > 0 ? (
+        <div className="gps-map-container" style={{
+          background: 'var(--bg2)',
+          borderRadius: 'var(--rlg)',
+          border: '1px solid var(--border)',
+          padding: '20px',
+          marginBottom: '16px',
+          height: '400px',
+          position: 'relative',
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          {/* Simple SVG Grid Map */}
+          <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, opacity: 0.1 }}>
+            <defs>
+              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="var(--t1)" strokeWidth="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)" />
+          </svg>
+
+          <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            {(() => {
+              const withCoords = vehicles.filter(v => v.latitude != null && v.longitude != null);
+              if (withCoords.length === 0) return null;
+
+              // Calculate bounds for better projection
+              const lats = withCoords.map(v => v.latitude as number);
+              const lngs = withCoords.map(v => v.longitude as number);
+              const minLat = Math.min(...lats);
+              const maxLat = Math.max(...lats);
+              const minLng = Math.min(...lngs);
+              const maxLng = Math.max(...lngs);
+
+              const latRange = Math.max(maxLat - minLat, 0.01);
+              const lngRange = Math.max(maxLng - minLng, 0.01);
+
+              return withCoords.map(v => {
+                const lat = v.latitude as number;
+                const lng = v.longitude as number;
+
+                // Scale to 10-90% to avoid edges
+                const x = 10 + ((lng - minLng) / lngRange) * 80;
+                const y = 90 - ((lat - minLat) / latRange) * 80; // Invert Y for map
+
+                return (
+                  <div
+                    key={v.registration_number}
+                    style={{
+                      position: 'absolute',
+                      left: `${x}%`,
+                      top: `${y}%`,
+                      transform: 'translate(-50%, -50%)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      transition: 'all 1s ease-in-out',
+                      zIndex: 10
+                    }}
+                  >
+                    <div className={`pulse-dot ${v.status === 'moving' ? 'green' : 'red'}`} style={{ width: '12px', height: '12px', background: v.status === 'moving' ? 'var(--green)' : 'var(--red)' }} />
+                    <div style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      background: 'var(--bg3)',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border)',
+                      marginTop: '4px',
+                      whiteSpace: 'nowrap',
+                      color: 'var(--t1)',
+                      boxShadow: 'var(--sh)'
+                    }}>
+                      {v.registration_number}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+
+          <div style={{ position: 'absolute', bottom: '12px', left: '12px', fontSize: '10px', color: 'var(--t3)', background: 'var(--bg2)', padding: '4px 8px', borderRadius: '4px' }}>
+            Visual Telemetry Area (Relative Coordinates)
+          </div>
+        </div>
+      ) : null}
+
+      <div className="gps-iframe-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '24px', background: 'var(--bg3)', borderRadius: 'var(--rlg)', border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: '12px', color: 'var(--t2)', textAlign: 'center' }}>
+          Real-time map requires external provider access.
         </div>
         <a
           href="https://fleet.blackbuck.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="btn-sm accent"
+          className="btn-sm outline"
           style={{ textDecoration: 'none' }}
         >
-          Open Blackbuck Fleet →
+          View on Blackbuck Fleet Map →
         </a>
       </div>
     </div>

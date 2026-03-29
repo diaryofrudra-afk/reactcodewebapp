@@ -1,4 +1,4 @@
-import { fmtINR, fmtHours, calcBill } from '../../utils';
+import { fmtINR, fmtHours, calcBill, fmtDate } from '../../utils';
 import type { Crane, TimesheetEntry } from '../../types';
 
 interface VehicleCardProps {
@@ -53,13 +53,15 @@ export function VehicleCard({ crane, timesheets, operatorName, alerts, onAssign,
           {op ? opLabel : 'Standby'}
         </span>
         <div className="crane-actions">
-          <button className="ca-btn c-acc btn-assign" title="Assign"
-            onClick={() => onAssign(crane.reg)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-          </button>
+          {!op && (
+            <button className="ca-btn c-acc btn-assign" title="Assign Operator"
+              onClick={() => onAssign(crane.reg)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </button>
+          )}
           <button className="ca-btn c-red btn-del-crane" title="Delete"
             onClick={() => onDelete(crane.reg)}>
             <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
@@ -85,7 +87,7 @@ export function VehicleCard({ crane, timesheets, operatorName, alerts, onAssign,
             const b = crane.rate ? calcBill(h, crane, getAccHrs(timesheets, e.date, e.startTime)) : null;
             return (
               <div key={e.id} className="sh-row">
-                <span className="sh-date">{e.date}</span>
+                <span className="sh-date">{fmtDate(e.date)}</span>
                 <span className="sh-hrs">{fmtHours(h)}</span>
                 <span className="sh-bill">{b ? fmtINR(b.total) : '—'}</span>
               </div>

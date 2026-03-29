@@ -108,10 +108,11 @@ export function MobileDrawer({ open, onClose, onSignOut }: MobileDrawerProps) {
             onClick={() => nav('fuel')}
           >
             <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
-              <path d="M3 22V8l7-6 7 6v14" />
-              <rect x="9" y="12" width="4" height="10" />
-              <path d="M17 8h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2" />
-              <path d="M19 8V5" />
+              <path d="M3 22V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v15" />
+              <path d="M6 9h6v4H6z" />
+              <path d="M17 10h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+              <circle cx="19" cy="8" r="1" fill="currentColor" />
+              <path d="M19 18v3" />
             </svg>
             Fuel
           </div>

@@ -20,6 +20,8 @@ interface AppContextValue {
   toggleSidebar: () => void;
   user: string | null;
   setUser: (u: string | null) => void;
+  userRole: string | null;
+  setUserRole: (r: string | null) => void;
   state: AppState;
   setState: (updater: (prev: AppState) => AppState) => void;
   save: () => void;
@@ -53,6 +55,7 @@ function loadInitialState(): AppState {
     files: safeLoad('files', {}),
     timesheets: safeLoad('timesheets', {}),
     compliance: safeLoad('compliance', {}),
+    attendance: safeLoad('attendance', []),
     maintenance: safeLoad('maintenance', {}),
     notifications: safeLoad('notifications', []),
     opNotifications: safeLoad('opNotifications', {}),
@@ -62,11 +65,17 @@ function loadInitialState(): AppState {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [activePage, setActivePage] = useState<PageId>('fleet');
+  const [activePage, setActivePageState] = useState<PageId>(() => {
+    const role = localStorage.getItem('rudra_user_role');
+    return role === 'operator' ? 'logger' : 'fleet';
+  });
   const { theme, toggleTheme } = useTheme();
   const { collapsed, toggle: toggleSidebar } = useSidebar();
   const [user, setUserState] = useState<string | null>(
     () => localStorage.getItem('rudra_user')
+  );
+  const [userRole, setUserRoleState] = useState<string | null>(
+    () => localStorage.getItem('rudra_user_role')
   );
   const [appState, setAppState] = useState<AppState>(loadInitialState);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -77,10 +86,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else localStorage.removeItem('rudra_user');
   };
 
+  const setUserRole = (r: string | null) => {
+    setUserRoleState(r);
+    if (r) localStorage.setItem('rudra_user_role', r);
+    else localStorage.removeItem('rudra_user_role');
+  };
+
   const save = useCallback(() => {
     const keys: (keyof AppState)[] = [
       'operators', 'operatorProfiles', 'cranes', 'files', 'timesheets',
-      'compliance', 'maintenance', 'notifications', 'opNotifications',
+      'compliance', 'attendance', 'maintenance', 'notifications', 'opNotifications',
       'fuelLogs', 'cameras', 'advancePayments', 'diagnostics', 'clients',
       'invoices', 'payments', 'creditNotes', 'quotations', 'proformas',
       'challans', 'ownerProfile',
@@ -96,10 +111,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      activePage, setActivePage,
+      activePage, setActivePage: setActivePageState,
       theme, toggleTheme,
       sidebarCollapsed: collapsed, toggleSidebar,
       user, setUser,
+      userRole, setUserRole,
       state: appState, setState: setAppState, save,
       toasts, showToast,
     }}>

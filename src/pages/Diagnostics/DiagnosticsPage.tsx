@@ -25,7 +25,9 @@ interface DiagSnapshot {
 
 interface DiagRecord {
   health?: string;
-  snapshots?: DiagSnapshot[];
+  snapshots?: DiagSnapshot[]; // Legacy/Frontend storage
+  snapshot?: DiagSnapshot;    // Backend model
+  updated_at?: string;
 }
 
 function getDiagHealth(s: DiagSnapshot): string {
@@ -55,7 +57,11 @@ function simulateDiag(_reg: string): DiagRecord {
     date: new Date().toLocaleDateString('en-IN'),
     time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
   };
-  return { health: getDiagHealth(snap), snapshots: [snap] };
+  return { 
+    health: getDiagHealth(snap), 
+    snapshot: snap, 
+    updated_at: new Date().toISOString() 
+  };
 }
 
 export function DiagnosticsPage({ active }: { active: boolean }) {
@@ -121,8 +127,9 @@ export function DiagnosticsPage({ active }: { active: boolean }) {
   const warnCount = allDiags.filter(d => d.diag && d.diag.health === 'warning').length;
   const critCount = allDiags.filter(d => d.diag && d.diag.health === 'critical').length;
   const totalFaults = allDiags.reduce((s, d) => {
-    if (!d.diag || !d.diag.snapshots || !d.diag.snapshots[0]) return s;
-    return s + (d.diag.snapshots[0].faults || []).length;
+    const snap = d.diag ? (d.diag.snapshot || (d.diag.snapshots && d.diag.snapshots[0])) : null;
+    if (!snap) return s;
+    return s + (snap.faults || []).length;
   }, 0);
 
   let filtered = allDiags;
@@ -228,7 +235,7 @@ export function DiagnosticsPage({ active }: { active: boolean }) {
           <div className="empty-msg">No assets match this filter.</div>
         ) : (
           filtered.map(({ crane, diag }) => {
-            const s = diag && diag.snapshots && diag.snapshots.length ? diag.snapshots[0] : null;
+            const s = diag ? (diag.snapshot || (diag.snapshots && diag.snapshots[0])) : null;
             const health = diag ? diag.health || 'offline' : 'offline';
             const hClass = health === 'good' ? 'good' : health === 'warning' ? 'warning' : health === 'critical' ? 'critical' : 'offline';
             const hLabel = health.charAt(0).toUpperCase() + health.slice(1);
