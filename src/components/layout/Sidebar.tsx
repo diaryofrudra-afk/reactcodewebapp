@@ -9,19 +9,19 @@ import { SidebarUser } from './SidebarUser';
 function FleetIcon(): ReactNode {
   return (
     <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
-      {/* Base / tracks */}
-      <path d="M2 21h14" />
-      <rect x="3" y="18" width="12" height="3" rx="1.5" />
+      {/* Base / tracks - shifted +2px right */}
+      <path d="M4 21h14" />
+      <rect x="5" y="18" width="12" height="3" rx="1.5" />
       {/* Cabin */}
-      <rect x="9" y="13" width="5" height="5" rx="0.5" />
-      <line x1="10.5" y1="13" x2="10.5" y2="18" />
+      <rect x="11" y="13" width="5" height="5" rx="0.5" />
+      <line x1="12.5" y1="13" x2="12.5" y2="18" />
       {/* Boom arm */}
-      <line x1="11" y1="13" x2="3" y2="4" />
+      <line x1="13" y1="13" x2="5" y2="4" />
       {/* Hook cable + hook */}
-      <line x1="3" y1="4" x2="3" y2="8" />
-      <path d="M2 8.5a1.2 1.2 0 1 0 2 0" />
+      <line x1="5" y1="4" x2="5" y2="8" />
+      <path d="M4 8.5a1.2 1.2 0 1 0 2 0" />
       {/* Boom support strut */}
-      <line x1="7" y1="18" x2="6" y2="9" />
+      <line x1="9" y1="18" x2="8" y2="9" />
     </svg>
   );
 }
@@ -86,10 +86,10 @@ function DiagnosticsIcon(): ReactNode {
 function OperatorsIcon(): ReactNode {
   return (
     <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <line x1="23" y1="21" x2="23" y2="15" />
-      <line x1="20" y1="18" x2="26" y2="18" />
+      <path d="M16 21v-2a4 4 0 0 0-4-4H4a4 4 0 0 0-4 4v2" />
+      <circle cx="8" cy="7" r="4" />
+      <line x1="22" y1="18" x2="22" y2="12" />
+      <line x1="19" y1="15" x2="25" y2="15" />
     </svg>
   );
 }
