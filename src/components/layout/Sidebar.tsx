@@ -55,12 +55,9 @@ function GpsIcon(): ReactNode {
 
 function FuelIcon(): ReactNode {
   return (
-    <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
-      <path d="M3 22V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v15" />
-      <path d="M6 9h6v4H6z" />
-      <path d="M17 10h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
-      <circle cx="19" cy="8" r="1" fill="currentColor" />
-      <path d="M19 18v3" />
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" className="bi bi-fuel-pump" viewBox="0 0 16 16">
+      <path d="M3 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5zM5 8h2V5H5zm7 0v3a.5.5 0 0 1-.5.5 1.5 1.5 0 0 0-1.5 1.5v1a.5.5 0 0 1-1 0v-1a2.5 2.5 0 0 1 2.5-2.5.5.5 0 0 0 .5-.5V8a2 2 0 0 0-2-2 2 2 0 1 1 4 0 2 2 0 0 0-2 2M12 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2m-9 8a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5z"/>
+      <path d="M12 1a3 3 0 0 0-3 3v1H3a2 2 0 0 0-2 2v13h10V18a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v3h2V4a3 3 0 0 0-3-3m-1 5V4a2 2 0 0 1 2-2 2 2 0 0 1 2 2v2zM2 19V7a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v12z"/>
     </svg>
   );
 }
