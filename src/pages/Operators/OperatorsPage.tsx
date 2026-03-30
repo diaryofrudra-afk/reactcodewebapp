@@ -22,7 +22,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-const BLANK_FORM = { name: '', phone: '', license: '', aadhaar: '' };
+const BLANK_FORM = { name: '', phone: '', license: '', aadhaar: '', salary: '', workingDays: '26' };
 
 export function OperatorsPage({ active }: { active: boolean }) {
   const { state, setState, showToast } = useApp();
@@ -71,11 +71,15 @@ export function OperatorsPage({ active }: { active: boolean }) {
   function openEdit(id: string) {
     const op = state.operators.find(o => o.id === id);
     if (!op) return;
+    const opKey = op.phone || id;
+    const prof = (state.operatorProfiles as any)[opKey] || {};
     setForm({
       name: op.name,
       phone: op.phone,
       license: op.license || '',
       aadhaar: op.aadhaar || '',
+      salary: String(prof.salary || ''),
+      workingDays: String(prof.workingDays || '26'),
     });
     setEditPhoto(opPhotos[id] || '');
     setEditId(id);
@@ -96,6 +100,10 @@ export function OperatorsPage({ active }: { active: boolean }) {
           await api.updateOperatorProfile(editId, { photo: editPhoto });
           setOpPhotos(prev => ({ ...prev, [editId]: editPhoto }));
         }
+        
+        const salaryNum = Number(form.salary) || 0;
+        const wdNum = Number(form.workingDays) || 26;
+        
         setState(prev => ({
           ...prev,
           operators: prev.operators.map(o =>
@@ -103,6 +111,10 @@ export function OperatorsPage({ active }: { active: boolean }) {
               ? { ...o, name, phone, license: form.license.trim(), aadhaar: form.aadhaar.trim() }
               : o
           ),
+          operatorProfiles: {
+            ...prev.operatorProfiles,
+            [phone]: { ...((prev.operatorProfiles as any)[phone] || {}), salary: salaryNum, workingDays: wdNum }
+          }
         }));
         showToast('Operator updated');
       } else {
@@ -114,6 +126,10 @@ export function OperatorsPage({ active }: { active: boolean }) {
           await api.updateOperatorProfile(newId, { photo: editPhoto });
           setOpPhotos(prev => ({ ...prev, [newId]: editPhoto }));
         }
+        
+        const salaryNum = Number(form.salary) || 0;
+        const wdNum = Number(form.workingDays) || 26;
+        
         const newOp: Operator = {
           id: newId,
           name,
@@ -122,7 +138,14 @@ export function OperatorsPage({ active }: { active: boolean }) {
           aadhaar: form.aadhaar.trim(),
           status: 'active',
         };
-        setState(prev => ({ ...prev, operators: [...prev.operators, newOp] }));
+        setState(prev => ({ 
+          ...prev, 
+          operators: [...prev.operators, newOp],
+          operatorProfiles: {
+            ...prev.operatorProfiles,
+            [phone]: { ...((prev.operatorProfiles as any)[phone] || {}), salary: salaryNum, workingDays: wdNum }
+          }
+        }));
         showToast(`${name} added`);
       }
       setModalOpen(false);
@@ -219,13 +242,45 @@ export function OperatorsPage({ active }: { active: boolean }) {
             const crane = state.cranes.find(c => c.operator === op.id || c.operator === op.phone);
             const opTs: TimesheetEntry[] = (state.timesheets[op.phone] || state.timesheets[op.id] || []);
             const initials = op.name.trim().split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || op.phone.slice(-2);
-            let totHrs = 0, totRev = 0;
+            
+            // Salary Calculation
+            const opKey = op.phone || String(op.id);
+            const profileAny = (state.operatorProfiles as any)[opKey] || {};
+            const salary = Number(profileAny?.salary) || 0;
+            const workDays = Number(profileAny?.workingDays) || 26;
+            
+            const now = new Date();
+            const yr = now.getFullYear();
+            const mo = now.getMonth() + 1;
+            const daysInMonth = new Date(yr, mo, 0).getDate();
+            const selectedMonth = `${yr}-${String(mo).padStart(2, '0')}`;
+            
+            const dayHoursMap: Record<string, number> = {};
             opTs.forEach(e => {
-              const h = Number(e.hoursDecimal) || 0;
-              const b = crane ? calcBill(h, crane, getAccHrs(opTs, e.date, e.startTime)) : null;
-              totHrs += h;
-              if (b) totRev += b.total;
+               const iso = e?.date?.substring(0, 10);
+               if (iso) dayHoursMap[iso] = (dayHoursMap[iso] || 0) + (Number(e?.hoursDecimal) || 0);
             });
+            const att: Record<string, boolean> = {};
+            for (const [iso, hrs] of Object.entries(dayHoursMap)) {
+               if (hrs > 0 && iso.startsWith(selectedMonth)) att[iso] = true;
+            }
+            state.attendance.filter((a: any) => a?.operator_key === opKey && a.date.startsWith(selectedMonth)).forEach((a: any) => {
+               if (a?.status === 'present') att[a.date] = true;
+               else if (a?.status === 'absent') att[a.date] = false;
+            });
+            let presentCount = 0;
+            for (let d = 1; d <= daysInMonth; d++) {
+               const iso = `${selectedMonth}-${String(d).padStart(2, '0')}`;
+               if (att[iso]) presentCount++;
+            }
+            
+            const perDay = workDays > 0 ? salary / workDays : 0;
+            const earnedGross = Math.round(perDay * presentCount);
+            
+            const opAdvances = ((state.advancePayments as any)[opKey] || []) as any[];
+            const monthlyAdvances = Array.isArray(opAdvances) ? opAdvances.filter(a => a?.date?.startsWith(selectedMonth)) : [];
+            const totalAdvances = monthlyAdvances.reduce((s, a) => s + (Number(a?.amount) || 0), 0);
+            
             return (
               <div key={op.id} className="op-row">
                 {opPhotos[op.id] ? (
@@ -243,11 +298,40 @@ export function OperatorsPage({ active }: { active: boolean }) {
                       </span>
                     )}
                     {crane ? <span className="badge accent">→ {crane.reg}</span> : <span className="badge">Unassigned</span>}
-                    {opTs.length > 0 && <span className="badge">{opTs.length} shifts · {fmtHours(totHrs)}</span>}
-                    {totRev > 0 && <span className="badge green">{fmtINR(totRev)}</span>}
+                    {salary > 0 && <span className="badge green">Earned: ₹{(earnedGross).toLocaleString()} / ₹{(salary).toLocaleString()}</span>}
+                    {totalAdvances > 0 && <span className="badge red" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>Adv: ₹{totalAdvances.toLocaleString()}</span>}
                   </div>
                 </div>
                 <div className="op-row-right">
+                  <button 
+                    className="ca-btn" 
+                    title="Add Advance" 
+                    style={{ background: 'var(--green-s)', color: 'var(--green)', borderColor: 'var(--green-s)' }}
+                    onClick={() => {
+                      const baseSalary = Number(((state.operatorProfiles as any)[opKey] || {}).salary) || 0;
+                      if (!baseSalary) return showToast('Please assign a Monthly Salary first by editing the operator', 'error');
+                      const amt = prompt(`Enter advance amount to pay ${op.name}:`);
+                      if (!amt) return;
+                      const notes = prompt('Enter notes/reason (optional):') || '';
+                      
+                      const nowISO = new Date().toISOString();
+                      const newAdv = { id: String(Date.now()), date: nowISO, amount: Number(amt), notes };
+                      setState(prev => ({
+                        ...prev,
+                        advancePayments: {
+                          ...(prev.advancePayments || {}),
+                          [opKey]: [...((prev.advancePayments as any)?.[opKey] || []), newAdv]
+                        }
+                      }));
+                      showToast(`Advance of ₹${amt} recorded for ${op.name}`);
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none">
+                      <rect x="2" y="6" width="20" height="12" rx="2" />
+                      <circle cx="12" cy="12" r="2" />
+                      <path d="M6 12h.01M18 12h.01" />
+                    </svg>
+                  </button>
                   <button className="ca-btn c-acc opr-edit" title="Edit" onClick={() => openEdit(op.id)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -314,6 +398,18 @@ export function OperatorsPage({ active }: { active: boolean }) {
           <input className="inp" placeholder="DL number" value={form.license} onChange={e => f('license', e.target.value)} />
           <label className="lbl">Aadhaar No.</label>
           <input className="inp" placeholder="Aadhaar number" value={form.aadhaar} onChange={e => f('aadhaar', e.target.value)} />
+          
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ flex: 1 }}>
+              <label className="lbl">Monthly Salary (₹)</label>
+              <input type="number" className="inp" placeholder="e.g. 25000" value={form.salary} onChange={e => f('salary', e.target.value)} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="lbl">Base Working Days</label>
+              <input type="number" className="inp" placeholder="e.g. 26" value={form.workingDays} onChange={e => f('workingDays', e.target.value)} />
+            </div>
+          </div>
+
           <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
             <button className="btn-sm accent" onClick={handleSave}>{editId ? 'Save Changes' : 'Add Operator'}</button>
             <button className="btn-sm outline" onClick={() => setModalOpen(false)}>Cancel</button>

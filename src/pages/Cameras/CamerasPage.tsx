@@ -165,7 +165,7 @@ export function CamerasPage({ active }: { active: boolean }) {
       {modalOpen && (
         <div className="overlay active" id="ov-camera" onClick={e => { if ((e.target as HTMLElement).id === 'ov-camera') setModalOpen(false); }}>
           <div className="modal">
-            <div className="modal-head">
+            <div className="modal-header">
               <div className="modal-title">{editId ? 'Edit Camera Feed' : 'Add Camera Feed'}</div>
               <button className="modal-close" onClick={() => setModalOpen(false)}>×</button>
             </div>

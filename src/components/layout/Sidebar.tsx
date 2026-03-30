@@ -82,16 +82,6 @@ function DiagnosticsIcon(): ReactNode {
   );
 }
 
-function AssetsIcon(): ReactNode {
-  return (
-    <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
-      <rect x="3" y="3" width="7" height="7" />
-      <rect x="14" y="3" width="7" height="7" />
-      <rect x="3" y="14" width="7" height="7" />
-      <rect x="14" y="14" width="7" height="7" />
-    </svg>
-  );
-}
 
 function OperatorsIcon(): ReactNode {
   return (
@@ -145,14 +135,7 @@ function OpHistoryIcon(): ReactNode {
 }
 
 
-function OpFilesIcon(): ReactNode {
-  return (
-    <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-    </svg>
-  );
-}
+
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 
@@ -187,7 +170,7 @@ export function Sidebar({ onSignOut }: SidebarProps) {
             <div className="nav-section-label">Manage</div>
             <div className="nav-section-divider" />
 
-            <SidebarNavItem page="assets"    label="Assets"     icon={<AssetsIcon />}    countId="nc-assets" />
+
             <SidebarNavItem page="operators" label="Operators"  icon={<OperatorsIcon />} countId="nc-ops" />
             <SidebarNavItem page="earnings"  label="Earnings"   icon={<EarningsIcon />} />
             <SidebarNavItem page="attendance" label="Attendance" icon={<AttendanceIcon />} />
@@ -202,7 +185,7 @@ export function Sidebar({ onSignOut }: SidebarProps) {
 
             <SidebarNavItem page="logger"     label="Log Time" icon={<LoggerIcon />} />
             <SidebarNavItem page="op-history" label="History"  icon={<OpHistoryIcon />} countId="nc-op-ts" />
-            <SidebarNavItem page="op-files"   label="My Files" icon={<OpFilesIcon />}   countId="nc-op-files" />
+            <SidebarNavItem page="attendance" label="Attendance" icon={<AttendanceIcon />} />
           </>
         )}
       </div>

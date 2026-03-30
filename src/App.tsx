@@ -4,7 +4,6 @@ import { Sidebar } from './components/layout/Sidebar';
 import { MobileDrawer } from './components/layout/MobileDrawer';
 import { ToastContainer } from './components/ui/Toast';
 import { FleetPage } from './pages/Fleet/FleetPage';
-import { AssetsPage } from './pages/Assets/AssetsPage';
 import { OperatorsPage } from './pages/Operators/OperatorsPage';
 import { EarningsPage } from './pages/Earnings/EarningsPage';
 import { AttendancePage } from './pages/Attendance/AttendancePage';
@@ -16,7 +15,8 @@ import { CamerasPage } from './pages/Cameras/CamerasPage';
 import { DiagnosticsPage } from './pages/Diagnostics/DiagnosticsPage';
 import { LoggerPage } from './pages/Logger/LoggerPage';
 import { OpHistoryPage } from './pages/OpHistory/OpHistoryPage';
-import { OpFilesPage } from './pages/OpFiles/OpFilesPage';
+
+import { FloatingDashboard } from './components/layout/FloatingDashboard';
 import { SettingsModal } from './pages/Settings/SettingsPage';
 import { ErrorBoundary } from './ErrorBoundary';
 import { api, setToken, clearToken, getToken } from './services/api';
@@ -307,7 +307,6 @@ export default function App() {
         {userRole === 'owner' && (
           <>
             <ErrorBoundary><FleetPage active={activePage === 'fleet'} /></ErrorBoundary>
-            <ErrorBoundary><AssetsPage active={activePage === 'assets'} /></ErrorBoundary>
             <ErrorBoundary><OperatorsPage active={activePage === 'operators'} /></ErrorBoundary>
             <ErrorBoundary><EarningsPage active={activePage === 'earnings'} /></ErrorBoundary>
             <ErrorBoundary><AttendancePage active={activePage === 'attendance'} /></ErrorBoundary>
@@ -323,7 +322,7 @@ export default function App() {
           <>
             <ErrorBoundary><LoggerPage active={activePage === 'logger'} /></ErrorBoundary>
             <ErrorBoundary><OpHistoryPage active={activePage === 'op-history'} /></ErrorBoundary>
-            <ErrorBoundary><OpFilesPage active={activePage === 'op-files'} /></ErrorBoundary>
+            <ErrorBoundary><AttendancePage active={activePage === 'attendance'} /></ErrorBoundary>
           </>
         )}
       </div>
@@ -334,6 +333,7 @@ export default function App() {
         onSignOut={handleSignOut}
       />
       <SettingsModal />
+      <FloatingDashboard />
       <ToastContainer />
     </div>
   );

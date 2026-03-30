@@ -1,8 +1,8 @@
 export type Theme = 'dark' | 'light';
 export type PageId =
-  | 'fleet' | 'assets' | 'operators' | 'earnings' | 'attendance'
+  | 'fleet' | 'operators' | 'earnings' | 'attendance'
   | 'analytics' | 'billing' | 'gps' | 'fuel' | 'cameras'
-  | 'diagnostics' | 'logger' | 'op-history' | 'op-files';
+  | 'diagnostics' | 'logger' | 'op-history' | 'op-attendance';
 
 export interface Crane {
   id: string;

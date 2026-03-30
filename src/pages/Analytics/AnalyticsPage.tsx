@@ -291,10 +291,17 @@ export function AnalyticsPage({ active }: { active: boolean }) {
         {/* Fleet Revenue */}
         <div className="kpi-card">
           <div className="kpi-top">
-            <div className="kpi-icon" style={{ background: 'var(--accent-s)' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round">
-                <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
+            <div className="kpi-icon" style={{ 
+              background: 'var(--accent-s)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              fontSize: '15px', 
+              fontWeight: '700', 
+              color: 'var(--accent)',
+              fontFamily: 'system-ui, -apple-system, sans-serif'
+            }}>
+              ₹
             </div>
           </div>
           <div className="kpi-bottom">
@@ -326,8 +333,15 @@ export function AnalyticsPage({ active }: { active: boolean }) {
         <div className="kpi-card">
           <div className="kpi-top">
             <div className="kpi-icon" style={{ background: 'var(--amber-s)' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round">
-                <path d="M2 20h20" /><path d="M10 4v16" /><path d="M10 4l8 4" /><path d="M18 8v12" />
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 21h14" />
+                <rect x="3" y="18" width="12" height="3" rx="1.5" />
+                <rect x="9" y="13" width="5" height="5" rx="0.5" />
+                <line x1="10.5" y1="13" x2="10.5" y2="18" />
+                <line x1="11" y1="13" x2="3" y2="4" />
+                <line x1="3" y1="4" x2="3" y2="8" />
+                <path d="M2 8.5a1.2 1.2 0 1 0 2 0" />
+                <line x1="7" y1="18" x2="6" y2="9" />
               </svg>
             </div>
           </div>
@@ -342,8 +356,10 @@ export function AnalyticsPage({ active }: { active: boolean }) {
         <div className="kpi-card">
           <div className="kpi-top">
             <div className="kpi-icon" style={{ background: 'var(--red-s)' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round">
-                <path d="M3 22V8l7-6 7 6v14" /><rect x="9" y="12" width="4" height="10" /><path d="M17 8h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2" />
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 22V8l5-5h7l2 2v2h1a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v6" />
+                <rect x="3" y="14" width="9" height="8" />
+                <path d="M18 9h.01" />
               </svg>
             </div>
           </div>
@@ -541,9 +557,9 @@ export function AnalyticsPage({ active }: { active: boolean }) {
                       {initials}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '11px', fontFamily: 'var(--fm)', fontWeight: 600, color: 'var(--t1)' }}>{name}</div>
+                      <div style={{ fontSize: '11px', fontFamily: 'var(--fm)', fontWeight: 600, color: 'var(--t1)' }}>{crane ? crane.reg : 'N/A'}</div>
                       <div style={{ fontSize: '9px', color: 'var(--t3)', marginTop: '1px' }}>
-                        {crane ? `${crane.reg} · ` : ''}{shifts} shifts
+                        {name} · {shifts} shifts
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>

@@ -1,19 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { calcHours, fmtHours, calcBill, fmtINR, todayISO, todayStr } from '../../utils';
+import { calcHours, fmtHours, todayISO } from '../../utils';
 import { api } from '../../services/api';
 import type { TimesheetEntry } from '../../types';
+import { LogbookViewer } from '../../components/ui/LogbookViewer';
 
 function fmt12(t: string): string {
   if (!t) return '—';
   const [hh, mm] = t.split(':').map(Number);
   return `${hh % 12 || 12}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'AM' : 'PM'}`;
-}
-
-function getAccHrs(ts: TimesheetEntry[], date: string, startTime: string): number {
-  return ts
-    .filter(e => e.date === date && e.startTime < startTime)
-    .reduce((s, e) => s + (Number(e.hoursDecimal) || 0), 0);
 }
 
 export function LoggerPage({ active }: { active: boolean }) {
@@ -22,7 +17,9 @@ export function LoggerPage({ active }: { active: boolean }) {
 
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
-  const [notes, setNotes] = useState('');
+  const [viewerFileId, setViewerFileId] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const assigned = cranes.find(c => c.operator === user);
   const profile = user ? (operatorProfiles[user] || {}) : {};
@@ -30,15 +27,13 @@ export function LoggerPage({ active }: { active: boolean }) {
   const myFiles: unknown[] = user ? (files[user] || []) : [];
 
   const h = calcHours(startTime, endTime);
-  const bill = assigned && assigned.rate && h && h > 0
-    ? calcBill(h, assigned, getAccHrs(myTs, todayStr(), startTime))
-    : null;
 
   const handleCommit = async () => {
     if (!startTime || !endTime) return showToast('Set start and end times', 'error');
     if (!h || h <= 0) return showToast('Invalid time range', 'error');
     const entryId = String(Date.now());
     const dateISO = todayISO();
+
     const entry: TimesheetEntry = {
       id: entryId,
       date: dateISO,
@@ -46,7 +41,6 @@ export function LoggerPage({ active }: { active: boolean }) {
       endTime,
       hoursDecimal: h,
       operatorId: user || undefined,
-      notes,
     };
     setState(prev => {
       const uid = user || '';
@@ -77,10 +71,8 @@ export function LoggerPage({ active }: { active: boolean }) {
         attendance: newAttendance,
       };
     });
-    setNotes('');
-    const billMsg = bill ? ` · ${fmtINR(bill.total)}` : '';
-    showToast(`Logged: ${fmt12(startTime)} → ${fmt12(endTime)}${billMsg}`);
-    if (bill?.hasOT) showToast(`OT: +${fmtHours(bill.otH)}`, 'warn');
+    
+    showToast(`Logged: ${fmt12(startTime)} → ${fmt12(endTime)} · ${fmtHours(h)}`);
     // Persist to backend
     try {
       await api.createTimesheet({
@@ -91,11 +83,53 @@ export function LoggerPage({ active }: { active: boolean }) {
         end_time: endTime,
         hours_decimal: h,
         operator_id: user || undefined,
-        notes,
       });
     } catch {
       showToast('Failed to sync to server', 'error');
     }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const maxSize = 5 * 1024 * 1024; // 5 MB
+    if (file.size > maxSize) return showToast('File too large (max 5 MB)', 'error');
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      const dateISO = todayISO();
+      
+      // Delete existing logbook for today if any
+      const existingKey = `Logbook-${dateISO}`;
+      const existing = myFiles.find((f: any) => f.name.startsWith(existingKey)) as any;
+      if (existing) {
+        try { await api.deleteFile(existing.id); } catch { /* ignore */ }
+      }
+
+      const fileRecord = {
+        id: existing ? existing.id : String(Date.now()),
+        owner_key: user || '',
+        name: `${existingKey}-${file.name}`,
+        type: file.type,
+        data: base64,
+        size: String(file.size),
+        timestamp: new Date().toISOString(),
+      };
+      
+      setState(prev => {
+        const uid = user || '';
+        const existingFiles = (prev.files[uid] || []).filter((f: any) => f.id !== fileRecord.id);
+        return { ...prev, files: { ...prev.files, [uid]: [fileRecord, ...existingFiles] } };
+      });
+      showToast(`Today's Logbook Uploaded`);
+      try {
+        await api.createFile(fileRecord);
+      } catch {
+        showToast('Failed to sync file to server', 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Recalc on time changes (no-op — bill is derived reactively)
@@ -118,13 +152,6 @@ export function LoggerPage({ active }: { active: boolean }) {
                 {(profile as { licence?: string }).licence}
               </span>
             )}
-          </div>
-        )}
-        {assigned && assigned.rate && (
-          <div id="op-rate-pill">
-            <span className="op-rate-pill">
-              ₹{Number(assigned.rate).toLocaleString('en-IN')}/hr · Limit: {assigned.dailyLimit || 8}h · OT: ₹{Number(assigned.otRate || assigned.rate).toLocaleString('en-IN')}/hr
-            </span>
           </div>
         )}
         {!assigned && (
@@ -158,42 +185,54 @@ export function LoggerPage({ active }: { active: boolean }) {
           </div>
         </div>
 
-        {/* Bill preview */}
-        {bill && (
-          <div className="bill-preview show">
-            <div className="bp-label">Live Invoice Estimate</div>
-            <div className="bp-total">{fmtINR(bill.total)}</div>
-            <div className="bp-rows">
-              <div className="bp-row"><span>STD ({fmtHours(bill.stdH)} × {fmtINR(bill.rate)})</span><span>{fmtINR(bill.standard)}</span></div>
-              {bill.hasOT && <div className="bp-row ot"><span>OT ({fmtHours(bill.otH)} × {fmtINR(bill.otRate)})</span><span>{fmtINR(bill.ot)}</span></div>}
-              <div className="bp-row total"><span>TOTAL</span><span>{fmtINR(bill.total)}</span></div>
-            </div>
-          </div>
-        )}
-        {h && h > 0 && !bill && (
+        {/* Hours preview */}
+        {h && h > 0 && (
           <div className="bill-preview show">
             <div className="bp-label">Hours Calculated</div>
             <div className="bp-total">{fmtHours(h)}</div>
           </div>
         )}
 
-        {/* Notes */}
-        <div style={{ marginTop: 12 }}>
-          <div className="time-label" style={{ marginBottom: 5 }}>
-            Shift Remarks <span style={{ fontSize: 8, color: 'var(--t4)', textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(optional)</span>
-          </div>
-          <textarea
-            className="notes-area"
-            rows={2}
-            placeholder="Site, job details, supervisor…"
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-          />
-        </div>
+        {/* Action Buttons */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'min-content 1fr', gap: '12px', alignItems: 'center', marginBottom: '16px', marginTop: '16px' }}>
+          <label 
+            title="Upload Today's Authorized Logbook"
+            style={{
+              width: '46px', height: '46px',
+              borderRadius: '50%',
+              background: 'var(--accent-s)',
+              color: 'var(--accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+              boxShadow: '0 2px 8px rgba(99, 102, 241, 0.15)'
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <input ref={fileInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleFileUpload} />
+          </label>
 
-        <button className="btn-primary" style={{ marginTop: 10 }} onClick={handleCommit}>
-          Commit Log Entry
-        </button>
+          <button 
+            className="btn-primary" 
+            style={{ 
+              height: '46px', 
+              borderRadius: '23px',
+              fontSize: '14px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)'
+            }} 
+            onClick={handleCommit}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+              <path d="M5 13l4 4L19 7" />
+            </svg>
+            Commit Shift Log
+          </button>
+        </div>
 
         {/* Record count */}
         <div style={{ fontSize: 9, color: 'var(--t3)', textAlign: 'center', marginTop: 10 }}>
@@ -210,19 +249,27 @@ export function LoggerPage({ active }: { active: boolean }) {
           <div className="bill-table-wrap">
             <table className="data-table">
               <thead>
-                <tr><th>Start</th><th>End</th><th>Hours</th>{assigned?.rate && <th>Bill</th>}<th>Remarks</th></tr>
+                <tr><th>Start</th><th>End</th><th>Hours</th><th style={{ textAlign: 'center' }}>Log Book</th></tr>
               </thead>
               <tbody>
                 {todayEntries.map(e => {
                   const eh = Number(e.hoursDecimal) || 0;
-                  const eb = assigned?.rate ? calcBill(eh, assigned, getAccHrs(myTs, e.date, e.startTime)) : null;
                   return (
                     <tr key={e.id}>
                       <td>{fmt12(e.startTime)}</td>
                       <td>{fmt12(e.endTime)}</td>
                       <td><span className="hours-badge">{fmtHours(eh)}</span></td>
-                      {assigned?.rate && <td><span className="bill-badge">{eb ? fmtINR(eb.total) : '—'}</span></td>}
-                      <td style={{ fontSize: 10, color: 'var(--t2)' }}>{e.notes || '—'}</td>
+                      <td style={{ textAlign: 'center' }}>
+                         {(() => {
+                            const todayLogbook = myFiles.find((f: any) => f.name.startsWith(`Logbook-${e.date}`)) as any;
+                            if (!todayLogbook) return <span style={{fontSize:10, color:'var(--t4)'}}>Missing</span>;
+                            return (
+                               <div onClick={() => setViewerFileId(todayLogbook.id)} style={{width: 32, height: 32, cursor: 'pointer', borderRadius: 6, overflow: 'hidden', border:'1px solid var(--border)', display: 'inline-block'}}>
+                                   {todayLogbook.type.includes('image') ? <img src={todayLogbook.data} alt="thumb" style={{width:'100%', height:'100%', objectFit: 'cover'}}/> : <div style={{background:'var(--bg4)', width:'100%', height:'100%', fontSize:8, display:'flex', alignItems:'center', justifyContent:'center'}}>DOC</div>}
+                               </div>
+                            );
+                         })()}
+                      </td>
                     </tr>
                   );
                 })}
@@ -231,6 +278,46 @@ export function LoggerPage({ active }: { active: boolean }) {
           </div>
         </div>
       )}
+
+      {viewerFileId && (() => {
+        const fileRecord = myFiles.find((f: any) => f.id === viewerFileId) as any;
+        return (
+          <LogbookViewer
+            isOpen={!!viewerFileId}
+            onClose={() => setViewerFileId(null)}
+            fileDataUrl={fileRecord?.data || null}
+            fileName={fileRecord?.name}
+            // Allow update directly from viewer!
+            onUpdate={e => {
+                const maxSize = 5 * 1024 * 1024;
+                if (e.size > maxSize) return showToast('File too large (max 5 MB)', 'error');
+                const reader = new FileReader();
+                reader.onload = async () => {
+                  try {
+                    await api.deleteFile(viewerFileId);
+                    const fileRecordObj = {
+                      id: viewerFileId,
+                      owner_key: user || '',
+                      name: fileRecord.name,
+                      type: e.type,
+                      data: reader.result as string,
+                      size: String(e.size),
+                      timestamp: new Date().toISOString(),
+                    };
+                    await api.createFile(fileRecordObj);
+                    setState(prev => {
+                      const uid = user || '';
+                      const existingFiles = (prev.files[uid] || []).filter((f: any) => f.id !== viewerFileId);
+                      return { ...prev, files: { ...prev.files, [uid]: [fileRecordObj, ...existingFiles] } };
+                    });
+                    showToast('Logbook updated');
+                  } catch {}
+                };
+                reader.readAsDataURL(e);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

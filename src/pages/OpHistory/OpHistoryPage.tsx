@@ -1,7 +1,9 @@
 import { useApp } from '../../context/AppContext';
-import { calcBill, fmtINR, fmtHours, todayISO, fmtDate } from '../../utils';
+import { fmtHours, todayISO, fmtDate } from '../../utils';
 import { api } from '../../services/api';
 import type { TimesheetEntry } from '../../types';
+import { LogbookViewer } from '../../components/ui/LogbookViewer';
+import { useState } from 'react';
 
 function fmt12(t: string): string {
   if (!t) return '—';
@@ -9,20 +11,15 @@ function fmt12(t: string): string {
   return `${hh % 12 || 12}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'AM' : 'PM'}`;
 }
 
-function getAccHrs(ts: TimesheetEntry[], date: string, startTime: string): number {
-  return ts
-    .filter(e => e.date === date && e.startTime < startTime)
-    .reduce((s, e) => s + (Number(e.hoursDecimal) || 0), 0);
-}
+// getAccHrs removed as it was only used for billing calculations
 
 export function OpHistoryPage({ active }: { active: boolean }) {
   const { state, setState, showToast, user } = useApp();
-  const { timesheets, cranes, files } = state;
+  const { timesheets, files } = state;
+  const [viewerFileId, setViewerFileId] = useState<string | null>(null);
 
   const myTs: TimesheetEntry[] = user ? (timesheets[user] || []) : [];
   const myFiles: unknown[] = user ? (files[user] || []) : [];
-  const crane = cranes.find(c => c.operator === user);
-  const hasRate = !!(crane && crane.rate);
 
   const deleteEntry = async (id: string) => {
     if (!confirm('Remove this entry?')) return;
@@ -50,14 +47,44 @@ export function OpHistoryPage({ active }: { active: boolean }) {
     }
   };
 
+  const handleUpdateLogbook = async (file: File) => {
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) return showToast('File too large', 'error');
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        if (viewerFileId) await api.deleteFile(viewerFileId);
+        const fileRecord = {
+          id: viewerFileId || String(Date.now()),
+          owner_key: user || '',
+          name: file.name,
+          type: file.type,
+          data: reader.result as string,
+          size: String(file.size),
+          timestamp: new Date().toISOString(),
+        };
+        await api.createFile(fileRecord);
+        setState(prev => {
+          const uid = user || '';
+          const newFiles = (prev.files[uid] || []).filter((f: any) => f.id !== viewerFileId);
+          newFiles.unshift(fileRecord);
+          return { ...prev, files: { ...prev.files, [uid]: newFiles } };
+        });
+        showToast('Logbook updated');
+      } catch {
+        showToast('Update failed', 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const exportXlsx = () => {
     if (!XLSX) return showToast('XLSX library missing', 'error');
     const wb = XLSX.utils.book_new();
-    const td: unknown[][] = [['Date', 'Start', 'End', 'Hours', 'Bill (₹)', 'OT', 'Asset', 'Remarks']];
+    const td: unknown[][] = [['Date', 'Start', 'End', 'Hours', 'OT', 'Asset', 'Remarks']];
     myTs.forEach(e => {
       const h = Number(e.hoursDecimal) || 0;
-      const b = hasRate && crane ? calcBill(h, crane, getAccHrs(myTs, e.date, e.startTime)) : null;
-      td.push([e.date, fmt12(e.startTime), fmt12(e.endTime), fmtHours(h), b ? b.total : '—', (e as TimesheetEntry & { hasOT?: boolean }).hasOT ? 'Yes' : 'No', (e as TimesheetEntry & { craneReg?: string }).craneReg || '—', e.notes || '']);
+      td.push([e.date, fmt12(e.startTime), fmt12(e.endTime), fmtHours(h), (e as TimesheetEntry & { hasOT?: boolean }).hasOT ? 'Yes' : 'No', (e as TimesheetEntry & { craneReg?: string }).craneReg || '—', myFiles.some((f: any) => f.name.startsWith(`Logbook-${e.date}`)) ? 'Logbook Attached' : '']);
     });
     const ws1 = XLSX.utils.aoa_to_sheet(td);
     XLSX.utils.book_append_sheet(wb, ws1, 'Timesheets');
@@ -95,15 +122,13 @@ export function OpHistoryPage({ active }: { active: boolean }) {
                   <th>Start</th>
                   <th>End</th>
                   <th>Hours</th>
-                  {hasRate && <th>Bill</th>}
-                  <th>Remarks</th>
+                  <th style={{ textAlign: 'center' }}>Log Book</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {myTs.map(e => {
                   const eh = Number(e.hoursDecimal) || 0;
-                  const b = hasRate && crane ? calcBill(eh, crane, getAccHrs(myTs, e.date, e.startTime)) : null;
                   return (
                     <tr key={e.id}>
                       <td style={{ fontWeight: 700 }}>{fmtDate(e.date)}</td>
@@ -113,8 +138,17 @@ export function OpHistoryPage({ active }: { active: boolean }) {
                         <span className="hours-badge">{fmtHours(eh)}</span>
                         {(e as TimesheetEntry & { hasOT?: boolean }).hasOT && <span className="ot-badge"> OT</span>}
                       </td>
-                      {hasRate && <td><span className="bill-badge">{b ? fmtINR(b.total) : '—'}</span></td>}
-                      <td style={{ fontSize: 10, color: 'var(--t2)', maxWidth: 130, whiteSpace: 'normal' }}>{e.notes || '—'}</td>
+                      <td style={{ textAlign: 'center' }}>
+                         {(() => {
+                            const todayLogbook = myFiles.find((f: any) => f.name.startsWith(`Logbook-${e.date}`)) as any;
+                            if (!todayLogbook) return <span style={{fontSize:10, color:'var(--t4)'}}>Missing</span>;
+                            return (
+                               <div onClick={() => setViewerFileId(todayLogbook.id)} style={{width: 32, height: 32, cursor: 'pointer', borderRadius: 6, overflow: 'hidden', border:'1px solid var(--border)', display: 'inline-block'}}>
+                                   {todayLogbook.type.includes('image') ? <img src={todayLogbook.data} alt="thumb" style={{width:'100%', height:'100%', objectFit: 'cover'}}/> : <div style={{background:'var(--bg4)', width:'100%', height:'100%', fontSize:8, display:'flex', alignItems:'center', justifyContent:'center'}}>DOC</div>}
+                               </div>
+                            );
+                         })()}
+                      </td>
                       <td>
                         <button
                           className="btn-icon-sm red"
@@ -133,6 +167,18 @@ export function OpHistoryPage({ active }: { active: boolean }) {
           </div>
         )}
       </div>
+      {viewerFileId && (() => {
+        const fileRecord = myFiles.find((f: any) => f.id === viewerFileId) as any;
+        return (
+          <LogbookViewer
+            isOpen={!!viewerFileId}
+            onClose={() => setViewerFileId(null)}
+            fileDataUrl={fileRecord?.data || null}
+            fileName={fileRecord?.name}
+            onUpdate={handleUpdateLogbook}
+          />
+        );
+      })()}
     </div>
   );
 }

@@ -200,7 +200,7 @@ export function FuelPage({ active }: { active: boolean }) {
       {modalOpen && (
         <div className="overlay active" id="ov-fuel" onClick={e => { if ((e.target as HTMLElement).id === 'ov-fuel') setModalOpen(false); }}>
           <div className="modal">
-            <div className="modal-head">
+            <div className="modal-header">
               <div>
                 <div className="modal-title">Log Fuel</div>
                 <div style={{ fontSize: 9, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 1 }}>ASSET: {modalReg}</div>

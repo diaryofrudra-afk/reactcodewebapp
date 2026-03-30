@@ -851,7 +851,7 @@ const nextCNNum = () => { const fy = getFY(); const n = creditNotes.filter(c => 
       {clientModal && (
         <div className="overlay active" id="ov-client" onClick={e => { if ((e.target as HTMLElement).id === 'ov-client') setClientModal(false); }}>
           <div className="modal">
-            <div className="modal-head">
+            <div className="modal-header">
               <div className="modal-title">{editClientId ? 'Edit Client' : 'Add Client'}</div>
               <button className="modal-close" onClick={() => setClientModal(false)}>×</button>
             </div>
@@ -878,7 +878,7 @@ const nextCNNum = () => { const fy = getFY(); const n = creditNotes.filter(c => 
       {invModal && (
         <div className="overlay active" id="ov-invoice" onClick={e => { if ((e.target as HTMLElement).id === 'ov-invoice') setInvModal(false); }}>
           <div className="modal">
-            <div className="modal-head">
+            <div className="modal-header">
               <div className="modal-title">Create Invoice</div>
               <button className="modal-close" onClick={() => setInvModal(false)}>×</button>
             </div>
@@ -925,7 +925,7 @@ const nextCNNum = () => { const fy = getFY(); const n = creditNotes.filter(c => 
       {payModal && (
         <div className="overlay active" id="ov-payment" onClick={e => { if ((e.target as HTMLElement).id === 'ov-payment') setPayModal(false); }}>
           <div className="modal">
-            <div className="modal-head">
+            <div className="modal-header">
               <div className="modal-title">Record Payment</div>
               <button className="modal-close" onClick={() => setPayModal(false)}>×</button>
             </div>
@@ -948,7 +948,7 @@ const nextCNNum = () => { const fy = getFY(); const n = creditNotes.filter(c => 
       {cnModal && (
         <div className="overlay active" id="ov-credit" onClick={e => { if ((e.target as HTMLElement).id === 'ov-credit') setCnModal(false); }}>
           <div className="modal">
-            <div className="modal-head">
+            <div className="modal-header">
               <div className="modal-title">Issue Credit Note</div>
               <button className="modal-close" onClick={() => setCnModal(false)}>×</button>
             </div>
@@ -966,7 +966,7 @@ const nextCNNum = () => { const fy = getFY(); const n = creditNotes.filter(c => 
       {qtModal && (
         <div className="overlay active" id="ov-quotation" onClick={e => { if ((e.target as HTMLElement).id === 'ov-quotation') setQtModal(false); }}>
           <div className="modal">
-            <div className="modal-head">
+            <div className="modal-header">
               <div className="modal-title">Create Quotation</div>
               <button className="modal-close" onClick={() => setQtModal(false)}>×</button>
             </div>
@@ -1021,7 +1021,7 @@ const nextCNNum = () => { const fy = getFY(); const n = creditNotes.filter(c => 
       {chModal && (
         <div className="overlay active" id="ov-challan" onClick={e => { if ((e.target as HTMLElement).id === 'ov-challan') setChModal(false); }}>
           <div className="modal">
-            <div className="modal-head">
+            <div className="modal-header">
               <div className="modal-title">Issue Delivery Challan</div>
               <button className="modal-close" onClick={() => setChModal(false)}>×</button>
             </div>
