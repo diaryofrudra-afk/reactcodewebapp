@@ -833,6 +833,7 @@
     .sidebar.collapsed .nav-label {
       opacity: 0;
       width: 0;
+      flex: none;
       pointer-events: none
     }
 
